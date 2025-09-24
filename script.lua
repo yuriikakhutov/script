@@ -6,16 +6,20 @@ local HERO_NAME = "npc_dota_hero_bristleback"
 local HERO_ICON = "panorama/images/heroes/icons/" .. HERO_NAME .. "_png.vtex_c"
 local ORDER_IDENTIFIER = "bristleback_auto_back_order"
 
-local tab = Menu.Create("Heroes", "Bristleback", "Auto Back")
-tab:Icon(HERO_ICON)
-local general_group = tab:Create("General")
-local behavior_group = tab:Create("Behavior")
-local awareness_group = tab:Create("Awareness")
-local priority_group = tab:Create("Manual Priority", 1)
+local automation_tab = Menu.Create("Heroes", "Hero List", "Bristleback", "Auto Back", "Automation")
+automation_tab:Icon(HERO_ICON)
+local general_group = automation_tab:Create("General")
+local behavior_group = automation_tab:Create("Behavior")
+local awareness_group = automation_tab:Create("Awareness")
+
+local priority_tab = Menu.Create("Heroes", "Hero List", "Bristleback", "Auto Back", "Manual Priority")
+priority_tab:Icon(HERO_ICON)
+local priority_group = priority_tab:Create("Enemy Targets", 1)
 
 local ui = {}
 ui.enabled = general_group:Switch("Enable", true, HERO_ICON)
 ui.radius = general_group:Slider("Enemy detection radius", 300, 2000, 900, "%d")
+ui.min_enemies = general_group:Slider("Minimum enemies nearby", 1, 5, 1, "%d")
 ui.idle_delay = general_group:Slider("Idle delay", 0, 2000, 350, function(value)
     return string.format("%d ms", value)
 end)
@@ -47,6 +51,7 @@ ui.render_status = awareness_group:Switch("Render status", false, HERO_ICON)
 
 ui.enabled:ToolTip("Automatically keep Bristleback's rear toward nearby enemies when idle.")
 ui.radius:ToolTip("Maximum distance to scan for enemy heroes.")
+ui.min_enemies:ToolTip("Only turn when at least this many valid enemies are nearby.")
 ui.idle_delay:ToolTip("Required time since last player order before automation takes over.")
 ui.angle_tolerance:ToolTip("How closely Bristleback must face away before no turn is sent.")
 ui.turn_distance:ToolTip("Short movement offset to force Bristleback to turn.")
@@ -218,6 +223,7 @@ local function select_target(local_hero)
     local best_target = nil
     local best_priority = math.huge
     local best_distance = math.huge
+    local candidate_count = 0
 
     local heroes = Heroes.GetAll()
     for i = 1, #heroes do
@@ -227,6 +233,7 @@ local function select_target(local_hero)
             local distance = delta:Length2D()
             if distance <= detection_radius then
                 if enemy_is_valid(enemy) and passes_awareness_filters(enemy) then
+                    candidate_count = candidate_count + 1
                     local unit_name = NPC.GetUnitName(enemy)
                     local controls = enemy_controls[unit_name]
                     local priority = controls and controls.slider:Get() or math.huge
@@ -241,7 +248,7 @@ local function select_target(local_hero)
         end
     end
 
-    return best_target
+    return best_target, candidate_count
 end
 
 local function issue_turn_orders(local_player, local_hero, desired_forward)
@@ -337,6 +344,12 @@ function bristle_auto_back.OnUpdate()
         return
     end
 
+    local best_candidate, candidate_count = select_target(local_hero)
+    if candidate_count < ui.min_enemies:Get() then
+        tracked_target = nil
+        return
+    end
+
     local hero_position = Entity.GetAbsOrigin(local_hero)
     local target = tracked_target
 
@@ -354,7 +367,7 @@ function bristle_auto_back.OnUpdate()
     end
 
     if not target then
-        target = select_target(local_hero)
+        target = best_candidate
         if target and ui.sticky_time:Get() > 0 then
             tracked_target = target
             tracked_target_expire = current_time + (ui.sticky_time:Get() / 1000.0)
