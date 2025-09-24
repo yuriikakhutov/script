@@ -8,13 +8,20 @@ local ORDER_IDENTIFIER = "bristleback_auto_back_order"
 
 local automation_tab = Menu.Create("Heroes", "Hero List", "Bristleback", "Auto Back", "Automation")
 automation_tab:Icon(HERO_ICON)
-local general_group = automation_tab:Create("General")
-local behavior_group = automation_tab:Create("Behavior")
-local awareness_group = automation_tab:Create("Awareness")
+
+local general_section = automation_tab:Create("General")
+local general_group = general_section:Create("Options")
+
+local behavior_section = automation_tab:Create("Behavior")
+local behavior_group = behavior_section:Create("Options")
+
+local awareness_section = automation_tab:Create("Awareness")
+local awareness_group = awareness_section:Create("Options")
 
 local priority_tab = Menu.Create("Heroes", "Hero List", "Bristleback", "Auto Back", "Manual Priority")
 priority_tab:Icon(HERO_ICON)
-local priority_group = priority_tab:Create("Enemy Targets", 1)
+local priority_section = priority_tab:Create("Enemy Targets", 1)
+local priority_group = priority_section:Create("List")
 
 local ui = {}
 ui.enabled = general_group:Switch("Enable", true, HERO_ICON)
