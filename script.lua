@@ -6,22 +6,63 @@ local HERO_NAME = "npc_dota_hero_bristleback"
 local HERO_ICON = "panorama/images/heroes/icons/" .. HERO_NAME .. "_png.vtex_c"
 local ORDER_IDENTIFIER = "bristleback_auto_back_order"
 
-local automation_tab = Menu.Create("Heroes", "Hero List", "Bristleback", "Auto Back", "Automation")
-automation_tab:Icon(HERO_ICON)
+local function safe_menu_create(...)
+    local ok, menu = pcall(Menu.Create, ...)
+    if ok then
+        return menu
+    end
+    return nil
+end
 
-local general_section = automation_tab:Create("General")
-local general_group = general_section:Create("Options")
+local function safe_icon(target, icon)
+    if target and target.Icon then
+        pcall(target.Icon, target, icon)
+    end
+end
 
-local behavior_section = automation_tab:Create("Behavior")
-local behavior_group = behavior_section:Create("Options")
+local function create_group(parent, label, order)
+    if not parent then
+        return nil
+    end
 
-local awareness_section = automation_tab:Create("Awareness")
-local awareness_group = awareness_section:Create("Options")
+    if parent.Create then
+        local ok, group
+        if order ~= nil then
+            ok, group = pcall(parent.Create, parent, label, order)
+        else
+            ok, group = pcall(parent.Create, parent, label)
+        end
 
-local priority_tab = Menu.Create("Heroes", "Hero List", "Bristleback", "Auto Back", "Manual Priority")
-priority_tab:Icon(HERO_ICON)
-local priority_section = priority_tab:Create("Enemy Targets", 1)
-local priority_group = priority_section:Create("List")
+        if ok and group then
+            return group
+        end
+    end
+
+    return parent
+end
+
+local automation_tab = safe_menu_create("Heroes", "Hero List", "Bristleback", "Auto Back", "Automation")
+if not automation_tab then
+    automation_tab = safe_menu_create("Heroes", "Hero List", "Bristleback", "Auto Back")
+end
+if not automation_tab then
+    automation_tab = safe_menu_create("Heroes", "Hero List", "Bristleback")
+end
+if not automation_tab then
+    automation_tab = safe_menu_create("Heroes")
+end
+safe_icon(automation_tab, HERO_ICON)
+
+local general_group = create_group(create_group(automation_tab, "General", 1), "Options", 1) or automation_tab
+local behavior_group = create_group(create_group(automation_tab, "Behavior", 2), "Options", 1) or automation_tab
+local awareness_group = create_group(create_group(automation_tab, "Awareness", 3), "Options", 1) or automation_tab
+
+local priority_tab = safe_menu_create("Heroes", "Hero List", "Bristleback", "Auto Back", "Manual Priority")
+if not priority_tab then
+    priority_tab = automation_tab
+end
+safe_icon(priority_tab, HERO_ICON)
+local priority_group = create_group(create_group(priority_tab, "Enemy Targets", 4), "List", 1) or automation_tab or priority_tab
 
 local ui = {}
 ui.enabled = general_group:Switch("Enable", true, HERO_ICON)
@@ -128,6 +169,10 @@ end
 
 local function refresh_enemy_controls(local_hero, current_time)
     if not local_hero then
+        return
+    end
+
+    if not priority_group or not priority_group.Switch or not priority_group.Slider then
         return
     end
 
