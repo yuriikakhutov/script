@@ -73,6 +73,9 @@ ui.same_target_cooldown = general_group:Slider("Same target cooldown", 0, 4000, 
     return string.format("%.1f s", value / 1000)
 end)
 
+ui.channel_cast_delay = timing_group:Slider("Channel hook delay", 0, 1000, 200, function(value)
+    return string.format("%d ms", value)
+end)
 ui.cast_lead = timing_group:Slider("Hook lead adjustment", -400, 400, 50, function(value)
     return string.format("%d ms", value)
 end)
@@ -86,6 +89,7 @@ ui.require_priority = filters_group:Switch("Only hook prioritized enemies", fals
 ui.enabled:ToolTip("Automatically casts Meat Hook at the end location of enemy teleports.")
 ui.pause_after_manual:ToolTip("Delay automation after you manually issue an order to Pudge.")
 ui.same_target_cooldown:ToolTip("Prevent re-hook attempts on the same enemy within this cooldown window.")
+ui.channel_cast_delay:ToolTip("Delay after a teleport starts before throwing the hook to cancel the channel.")
 ui.cast_lead:ToolTip("Timing adjustment applied before the teleport completes. Positive values fire earlier.")
 ui.max_distance:ToolTip("Skip teleports that land beyond this distance from Pudge.")
 ui.min_distance:ToolTip("Skip teleports that land closer than this distance from Pudge.")
@@ -98,7 +102,7 @@ local last_priority_refresh = -1
 local processed_teleport_indices = {}
 local canceled_teleport_indices = {}
 local recent_hook_times = {}
-local active_target = nil
+local pending_targets = {}
 local last_manual_order_time = -math.huge
 
 local function now()
@@ -343,8 +347,32 @@ local function cleanup_index_maps()
     end
 end
 
-local function clear_active_target()
-    active_target = nil
+local function clear_pending_targets()
+    pending_targets = {}
+end
+
+local function remove_target_by_index(index)
+    if not index then
+        return
+    end
+    for i = #pending_targets, 1, -1 do
+        if pending_targets[i] and pending_targets[i].index == index then
+            table.remove(pending_targets, i)
+        end
+    end
+end
+
+local function has_pending_index(index)
+    if not index then
+        return false
+    end
+    for i = 1, #pending_targets do
+        local record = pending_targets[i]
+        if record and record.index == index then
+            return true
+        end
+    end
+    return false
 end
 
 local function cast_hook(hero, ability, position)
@@ -387,40 +415,55 @@ end
 local function schedule_target(hero, rec)
     local ability = get_hook_ability(hero)
     if not ability then
-        return
+        return false
     end
 
     local pos = rec.position
     local target = rec.target
-    processed_teleport_indices[rec.index] = now()
     if not should_consider_target(hero, target, pos) then
-        return
+        return false
     end
 
     local origin = Entity.GetAbsOrigin(hero)
     if not origin then
-        return
+        return false
     end
 
     local distance = vector_distance(origin, pos)
     local hook_speed = get_hook_speed(ability)
     local travel_time = distance / math.max(hook_speed, 1)
     local cast_point = get_cast_point(ability)
-    local lead_adjust = (ui.cast_lead:Get() or 0) / 1000
-
-    local cast_time = rec.end_time - travel_time - cast_point - lead_adjust
     local current_time = now()
+    local cast_time
+    local expire_time
+
+    if rec.name == "teleport_start" then
+        local delay = (ui.channel_cast_delay:Get() or 0) / 1000
+        local start_time = rec.start_time or current_time
+        cast_time = start_time + delay - cast_point
+        expire_time = start_time + 3.6
+    else
+        local lead_adjust = (ui.cast_lead:Get() or 0) / 1000
+        local end_time = rec.end_time or (current_time + 2.5)
+        cast_time = end_time - travel_time - cast_point - lead_adjust
+        expire_time = end_time + 0.5
+    end
+
     if cast_time < current_time then
         cast_time = current_time
     end
 
-    active_target = {
+    local record = {
         target = target,
         position = pos,
         cast_time = cast_time,
+        expire_time = expire_time,
         end_time = rec.end_time,
         index = rec.index,
+        name = rec.name,
     }
+    table.insert(pending_targets, record)
+    return true
 end
 
 local function try_acquire_target(hero)
@@ -429,12 +472,18 @@ local function try_acquire_target(hero)
     end
 
     for idx, rec in pairs(LIB_HEROES_DATA.teleport_time) do
-        if rec and rec.name == "teleport_end" and not processed_teleport_indices[idx] then
-            if rec.target and rec.position and rec.end_time then
+        if rec and (rec.name == "teleport_start" or rec.name == "teleport_end") and not processed_teleport_indices[idx] then
+            if rec.target and rec.position then
                 rec.index = idx
-                schedule_target(hero, rec)
-                if active_target then
-                    return
+                if rec.name == "teleport_start" then
+                    rec.start_time = rec.start_time or rec.time or rec.end_time
+                end
+                if not has_pending_index(idx) then
+                    if schedule_target(hero, rec) then
+                        processed_teleport_indices[idx] = now()
+                    elseif rec.name ~= "teleport_start" then
+                        processed_teleport_indices[idx] = processed_teleport_indices[idx] or now()
+                    end
                 end
             else
                 processed_teleport_indices[idx] = now()
@@ -459,29 +508,29 @@ end
 function pudge_tp_hook.OnUpdate()
     local hero = Heroes.GetLocal()
     if not hero then
-        clear_active_target()
+        clear_pending_targets()
         return
     end
 
     if NPC.GetUnitName(hero) ~= HERO_NAME then
-        clear_active_target()
+        clear_pending_targets()
         return
     end
 
     if not ui.enabled:Get() then
-        clear_active_target()
+        clear_pending_targets()
         return
     end
 
     local ability = get_hook_ability(hero)
     if not ability then
-        clear_active_target()
+        clear_pending_targets()
         return
     end
 
     local ability_level = Ability.GetLevel and Ability.GetLevel(ability) or 0
     if ability_level <= 0 then
-        clear_active_target()
+        clear_pending_targets()
         return
     end
 
@@ -492,49 +541,60 @@ function pudge_tp_hook.OnUpdate()
         return
     end
 
-    if not active_target then
-        try_acquire_target(hero)
-    end
+    try_acquire_target(hero)
 
-    if not active_target then
-        return
-    end
-
-    local cancel_info = canceled_teleport_indices[active_target.index]
-    if cancel_info then
-        clear_active_target()
-        return
-    end
-
-    local target = active_target.target
-    if not target or not Entity.IsAlive(target) then
-        clear_active_target()
-        return
-    end
-
-    if ui.ignore_illusions:Get() and is_entity_illusion(target) then
-        clear_active_target()
-        return
-    end
-
-    local cast_time = active_target.cast_time or 0
     local current_time = now()
-    if current_time + 0.01 < cast_time then
+    local best_index = nil
+    local best_target = nil
+
+    for i = #pending_targets, 1, -1 do
+        local record = pending_targets[i]
+        local remove = false
+        if not record then
+            remove = true
+        else
+            local cancel_info = canceled_teleport_indices[record.index]
+            if cancel_info then
+                remove = true
+            else
+                local target = record.target
+                if not target or not Entity.IsAlive(target) then
+                    remove = true
+                elseif ui.ignore_illusions:Get() and is_entity_illusion(target) then
+                    remove = true
+                elseif record.expire_time and current_time > record.expire_time then
+                    remove = true
+                end
+            end
+        end
+
+        if remove then
+            table.remove(pending_targets, i)
+        else
+            if not best_target or (record.cast_time or math.huge) < (best_target.cast_time or math.huge) then
+                best_target = record
+                best_index = i
+            end
+        end
+    end
+
+    if not best_target then
         return
     end
 
-    if current_time > (active_target.end_time or current_time) + 0.3 then
-        clear_active_target()
+    if current_time + 0.01 < (best_target.cast_time or 0) then
         return
     end
 
-    if cast_hook(hero, ability, active_target.position) then
-        local key = enemy_control_key(target)
+    if cast_hook(hero, ability, best_target.position) then
+        local key = enemy_control_key(best_target.target)
         if key then
             recent_hook_times[key] = current_time
         end
+        table.remove(pending_targets, best_index)
+    else
+        pending_targets[best_index].cast_time = current_time + 0.05
     end
-    clear_active_target()
 end
 
 function pudge_tp_hook.OnParticleDestroy(data)
@@ -542,9 +602,7 @@ function pudge_tp_hook.OnParticleDestroy(data)
         return
     end
     canceled_teleport_indices[data.index] = { time = now() }
-    if active_target and active_target.index == data.index then
-        clear_active_target()
-    end
+    remove_target_by_index(data.index)
 end
 
 return pudge_tp_hook
