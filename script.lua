@@ -16,7 +16,7 @@ local ITEM_DEFINITIONS = {
         item_name = "item_glimmer_cape",
         icon = "panorama/images/items/glimmer_cape_png.vtex_c",
         display_name = "Glimmer Cape",
-        type = "target",
+        type = "target_self",
         modifier = "modifier_item_glimmer_cape_fade",
     },
     ghost = {
@@ -33,19 +33,127 @@ local ITEM_DEFINITIONS = {
         type = "no_target",
         modifier = "modifier_black_king_bar_immune",
     },
+    lotus = {
+        item_name = "item_lotus_orb",
+        icon = "panorama/images/items/lotus_orb_png.vtex_c",
+        display_name = "Lotus Orb",
+        type = "target_self",
+        modifier = "modifier_item_lotus_orb_active",
+    },
+    crimson = {
+        item_name = "item_crimson_guard",
+        icon = "panorama/images/items/crimson_guard_png.vtex_c",
+        display_name = "Crimson Guard",
+        type = "no_target",
+        modifier = "modifier_item_crimson_guard_extra",
+    },
+    blade_mail = {
+        item_name = "item_blade_mail",
+        icon = "panorama/images/items/blade_mail_png.vtex_c",
+        display_name = "Blade Mail",
+        type = "no_target",
+        modifier = "modifier_item_blade_mail_reflect",
+    },
+    eul = {
+        item_name = "item_cyclone",
+        icon = "panorama/images/items/cyclone_png.vtex_c",
+        display_name = "Eul's Scepter",
+        type = "target_self",
+        modifier = "modifier_eul_cyclone",
+    },
+    wind_waker = {
+        item_name = "item_wind_waker",
+        icon = "panorama/images/items/wind_waker_png.vtex_c",
+        display_name = "Wind Waker",
+        type = "target_self",
+        modifier = "modifier_wind_waker_cyclone",
+    },
     force = {
         item_name = "item_force_staff",
         icon = "panorama/images/items/force_staff_png.vtex_c",
         display_name = "Force Staff",
-        type = "target",
+        type = "target_self",
         modifier = "modifier_item_forcestaff_active",
     },
     hurricane = {
         item_name = "item_hurricane_pike",
         icon = "panorama/images/items/hurricane_pike_png.vtex_c",
         display_name = "Hurricane Pike",
-        type = "target",
+        type = "target_self",
         modifier = "modifier_item_hurricane_pike_active",
+    },
+    atos = {
+        item_name = "item_rod_of_atos",
+        icon = "panorama/images/items/rod_of_atos_png.vtex_c",
+        display_name = "Rod of Atos",
+        type = "target_enemy",
+        enemy_modifier = "modifier_rod_of_atos_debuff",
+        range = 1100,
+    },
+    hex = {
+        item_name = "item_sheepstick",
+        icon = "panorama/images/items/sheepstick_png.vtex_c",
+        display_name = "Scythe of Vyse",
+        type = "target_enemy",
+        enemy_modifier = "modifier_sheepstick_debuff",
+        range = 800,
+    },
+    abyssal = {
+        item_name = "item_abyssal_blade",
+        icon = "panorama/images/items/abyssal_blade_png.vtex_c",
+        display_name = "Abyssal Blade",
+        type = "target_enemy",
+        enemy_modifier = "modifier_abyssal_blade_debuff",
+        range = 600,
+    },
+    diffusal = {
+        item_name = "item_diffusal_blade",
+        icon = "panorama/images/items/diffusal_blade_png.vtex_c",
+        display_name = "Diffusal Blade",
+        type = "target_enemy",
+        enemy_modifier = "modifier_item_diffusal_blade_slow",
+        range = 600,
+    },
+    gleipnir = {
+        item_name = "item_gleipnir",
+        icon = "panorama/images/items/gleipnir_png.vtex_c",
+        display_name = "Gleipnir",
+        type = "position_enemy",
+        enemy_modifier = "modifier_gleipnir_root",
+        range = 1100,
+    },
+    bloodthorn = {
+        item_name = "item_bloodthorn",
+        icon = "panorama/images/items/bloodthorn_png.vtex_c",
+        display_name = "Bloodthorn",
+        type = "target_enemy",
+        enemy_modifier = "modifier_bloodthorn_debuff",
+        range = 900,
+    },
+    silver = {
+        item_name = "item_silver_edge",
+        icon = "panorama/images/items/silver_edge_png.vtex_c",
+        display_name = "Silver Edge",
+        type = "no_target",
+        modifier = "modifier_item_silver_edge_windwalk",
+        requires_enemy = true,
+        search_range = 1200,
+    },
+    shadow_blade = {
+        item_name = "item_invis_sword",
+        icon = "panorama/images/items/invis_sword_png.vtex_c",
+        display_name = "Shadow Blade",
+        type = "no_target",
+        modifier = "modifier_item_invis_sword_windwalk",
+        requires_enemy = true,
+        search_range = 1200,
+    },
+    disperser = {
+        item_name = "item_disperser",
+        icon = "panorama/images/items/disperser_png.vtex_c",
+        display_name = "Disperser",
+        type = "target_self",
+        modifier = "modifier_item_disperser_active",
     },
 }
 
@@ -53,8 +161,22 @@ local priority_items = {
     { "glimmer", ITEM_DEFINITIONS.glimmer.icon, true },
     { "ghost", ITEM_DEFINITIONS.ghost.icon, true },
     { "bkb", ITEM_DEFINITIONS.bkb.icon, true },
+    { "lotus", ITEM_DEFINITIONS.lotus.icon, false },
+    { "crimson", ITEM_DEFINITIONS.crimson.icon, false },
+    { "blade_mail", ITEM_DEFINITIONS.blade_mail.icon, false },
+    { "eul", ITEM_DEFINITIONS.eul.icon, false },
+    { "wind_waker", ITEM_DEFINITIONS.wind_waker.icon, false },
     { "force", ITEM_DEFINITIONS.force.icon, false },
     { "hurricane", ITEM_DEFINITIONS.hurricane.icon, false },
+    { "disperser", ITEM_DEFINITIONS.disperser.icon, false },
+    { "atos", ITEM_DEFINITIONS.atos.icon, false },
+    { "hex", ITEM_DEFINITIONS.hex.icon, false },
+    { "abyssal", ITEM_DEFINITIONS.abyssal.icon, false },
+    { "bloodthorn", ITEM_DEFINITIONS.bloodthorn.icon, false },
+    { "diffusal", ITEM_DEFINITIONS.diffusal.icon, false },
+    { "gleipnir", ITEM_DEFINITIONS.gleipnir.icon, false },
+    { "silver", ITEM_DEFINITIONS.silver.icon, false },
+    { "shadow_blade", ITEM_DEFINITIONS.shadow_blade.icon, false },
 }
 
 local priority_widget = priority_group:MultiSelect("Items", priority_items, true)
@@ -87,6 +209,8 @@ local CONTROL_BLOCKERS = {
     Enum.ModifierState.MODIFIER_STATE_HEXED,
     Enum.ModifierState.MODIFIER_STATE_MUTED,
 }
+
+local DEFAULT_SEARCH_RANGE = 1200
 
 local function can_use_item(hero)
     if not Entity.IsAlive(hero) then
@@ -127,6 +251,65 @@ local function get_enabled_items()
     return enabled
 end
 
+local function get_effective_cast_range(hero, ability, definition)
+    local range = Ability.GetCastRange(ability)
+    if not range or range < 0 then
+        range = 0
+    end
+
+    local bonus = NPC.GetCastRangeBonus(hero)
+    if bonus and bonus > 0 then
+        range = range + bonus
+    end
+
+    if definition and definition.range then
+        range = math.max(range, definition.range)
+    end
+
+    if range <= 0 then
+        range = definition and definition.search_range or DEFAULT_SEARCH_RANGE
+    end
+
+    return range
+end
+
+local function find_enemy_target(hero, ability, definition)
+    local range = get_effective_cast_range(hero, ability, definition)
+    if range <= 0 then
+        return nil
+    end
+
+    local enemies = Entity.GetHeroesInRadius(hero, range, Enum.TeamType.TEAM_ENEMY, true, true)
+    if not enemies or #enemies == 0 then
+        return nil
+    end
+
+    local hero_pos = Entity.GetAbsOrigin(hero)
+    if not hero_pos then
+        return nil
+    end
+
+    local closest_enemy
+    local closest_distance = math.huge
+
+    for _, enemy in ipairs(enemies) do
+        if enemy and Entity.IsAlive(enemy) and not NPC.IsIllusion(enemy) then
+            if not definition.enemy_modifier or not NPC.HasModifier(enemy, definition.enemy_modifier) then
+                local enemy_pos = Entity.GetAbsOrigin(enemy)
+                if enemy_pos then
+                    local distance = hero_pos:Distance2D(enemy_pos)
+                    if distance < closest_distance then
+                        closest_distance = distance
+                        closest_enemy = enemy
+                    end
+                end
+            end
+        end
+    end
+
+    return closest_enemy
+end
+
 local function cast_item(hero, item_key, game_time)
     local definition = ITEM_DEFINITIONS[item_key]
     if not definition then
@@ -159,10 +342,37 @@ local function cast_item(hero, item_key, game_time)
         return false
     end
 
+    if definition.requires_enemy then
+        local range = get_effective_cast_range(hero, item, definition)
+        local enemies = Entity.GetHeroesInRadius(hero, range, Enum.TeamType.TEAM_ENEMY, true, true)
+        if not enemies or #enemies == 0 then
+            return false
+        end
+    end
+
     if definition.type == "no_target" then
         Ability.CastNoTarget(item)
-    elseif definition.type == "target" then
+    elseif definition.type == "target_self" then
         Ability.CastTarget(item, hero)
+    elseif definition.type == "target_enemy" then
+        local target = find_enemy_target(hero, item, definition)
+        if not target then
+            return false
+        end
+
+        Ability.CastTarget(item, target)
+    elseif definition.type == "position_enemy" then
+        local target = find_enemy_target(hero, item, definition)
+        if not target then
+            return false
+        end
+
+        local target_pos = Entity.GetAbsOrigin(target)
+        if not target_pos then
+            return false
+        end
+
+        Ability.CastPosition(item, target_pos)
     else
         return false
     end
