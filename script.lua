@@ -72,15 +72,17 @@ local ITEM_DEFINITIONS = {
         item_name = "item_force_staff",
         icon = "panorama/images/items/force_staff_png.vtex_c",
         display_name = "Force Staff",
-        type = "target_self",
+        type = "escape_self",
         modifier = "modifier_item_forcestaff_active",
+        search_range = 1600,
     },
     hurricane = {
         item_name = "item_hurricane_pike",
         icon = "panorama/images/items/hurricane_pike_png.vtex_c",
         display_name = "Hurricane Pike",
-        type = "target_self",
+        type = "escape_self",
         modifier = "modifier_item_hurricane_pike_active",
+        search_range = 1600,
     },
     atos = {
         item_name = "item_rod_of_atos",
@@ -155,6 +157,28 @@ local ITEM_DEFINITIONS = {
         type = "target_self",
         modifier = "modifier_item_disperser_active",
     },
+    pipe = {
+        item_name = "item_pipe",
+        icon = "panorama/images/items/pipe_png.vtex_c",
+        display_name = "Pipe of Insight",
+        type = "no_target",
+        modifier = "modifier_item_pipe_barrier",
+    },
+    ethereal = {
+        item_name = "item_ethereal_blade",
+        icon = "panorama/images/items/ethereal_blade_png.vtex_c",
+        display_name = "Ethereal Blade",
+        type = "target_self",
+        modifier = "modifier_item_ethereal_blade_ethereal",
+    },
+    blink = {
+        item_name = "item_blink",
+        icon = "panorama/images/items/blink_png.vtex_c",
+        display_name = "Blink Dagger",
+        type = "escape_position",
+        range = 1200,
+        escape_distance = 1150,
+    },
 }
 
 local priority_items = {
@@ -169,6 +193,9 @@ local priority_items = {
     { "force", ITEM_DEFINITIONS.force.icon, false },
     { "hurricane", ITEM_DEFINITIONS.hurricane.icon, false },
     { "disperser", ITEM_DEFINITIONS.disperser.icon, false },
+    { "pipe", ITEM_DEFINITIONS.pipe.icon, false },
+    { "ethereal", ITEM_DEFINITIONS.ethereal.icon, false },
+    { "blink", ITEM_DEFINITIONS.blink.icon, false },
     { "atos", ITEM_DEFINITIONS.atos.icon, false },
     { "hex", ITEM_DEFINITIONS.hex.icon, false },
     { "abyssal", ITEM_DEFINITIONS.abyssal.icon, false },
@@ -310,6 +337,122 @@ local function find_enemy_target(hero, ability, definition)
     return closest_enemy
 end
 
+local function find_closest_enemy(hero, range)
+    if range <= 0 then
+        return nil
+    end
+
+    local enemies = Entity.GetHeroesInRadius(hero, range, Enum.TeamType.TEAM_ENEMY, true, true)
+    if not enemies or #enemies == 0 then
+        return nil
+    end
+
+    local hero_pos = Entity.GetAbsOrigin(hero)
+    if not hero_pos then
+        return nil
+    end
+
+    local closest_enemy
+    local closest_distance = math.huge
+
+    for _, enemy in ipairs(enemies) do
+        if enemy and Entity.IsAlive(enemy) and not NPC.IsIllusion(enemy) then
+            local enemy_pos = Entity.GetAbsOrigin(enemy)
+            if enemy_pos then
+                local distance = hero_pos:Distance2D(enemy_pos)
+                if distance < closest_distance then
+                    closest_distance = distance
+                    closest_enemy = enemy
+                end
+            end
+        end
+    end
+
+    return closest_enemy
+end
+
+local function normalize_flat_vector(vector)
+    if not vector then
+        return nil
+    end
+
+    local length = vector:Length2D()
+    if length <= 0 then
+        return nil
+    end
+
+    vector.x = vector.x / length
+    vector.y = vector.y / length
+    vector.z = 0
+
+    return vector
+end
+
+local function face_direction(hero, direction)
+    if not hero or not direction then
+        return
+    end
+
+    local hero_pos = Entity.GetAbsOrigin(hero)
+    if not hero_pos then
+        return
+    end
+
+    if not Players or not Player or not Player.PrepareUnitOrders or not Players.GetLocal then
+        return
+    end
+
+    local player = Players.GetLocal()
+    if not player then
+        return
+    end
+
+    local move_target = hero_pos + direction * 50
+    move_target.z = hero_pos.z
+    Player.PrepareUnitOrders(
+        player,
+        Enum.UnitOrder.DOTA_UNIT_ORDER_MOVE_TO_POSITION,
+        nil,
+        move_target,
+        nil,
+        Enum.PlayerOrderIssuer.DOTA_ORDER_ISSUER_HERO_ONLY,
+        hero,
+        false,
+        false
+    )
+end
+
+local function get_escape_direction(hero, ability, definition)
+    local hero_pos = Entity.GetAbsOrigin(hero)
+    if not hero_pos then
+        return nil, nil
+    end
+
+    local search_range = definition and definition.search_range or DEFAULT_SEARCH_RANGE
+    if ability then
+        search_range = math.max(search_range, get_effective_cast_range(hero, ability, definition))
+    end
+
+    local enemy = find_closest_enemy(hero, search_range)
+    if not enemy then
+        return nil, nil
+    end
+
+    local enemy_pos = Entity.GetAbsOrigin(enemy)
+    if not enemy_pos then
+        return nil, nil
+    end
+
+    local direction = hero_pos - enemy_pos
+    direction = normalize_flat_vector(direction)
+
+    if not direction then
+        return nil, nil
+    end
+
+    return direction, enemy
+end
+
 local function cast_item(hero, item_key, game_time)
     local definition = ITEM_DEFINITIONS[item_key]
     if not definition then
@@ -373,6 +516,34 @@ local function cast_item(hero, item_key, game_time)
         end
 
         Ability.CastPosition(item, target_pos)
+    elseif definition.type == "escape_self" then
+        local direction = get_escape_direction(hero, item, definition)
+        if not direction then
+            return false
+        end
+
+        face_direction(hero, direction)
+        Ability.CastTarget(item, hero)
+    elseif definition.type == "escape_position" then
+        local direction = get_escape_direction(hero, item, definition)
+        if not direction then
+            return false
+        end
+
+        local hero_pos = Entity.GetAbsOrigin(hero)
+        if not hero_pos then
+            return false
+        end
+
+        local distance = definition.escape_distance or get_effective_cast_range(hero, item, definition)
+        if distance <= 0 then
+            distance = 1150
+        end
+
+        local cast_position = hero_pos + direction * distance
+        cast_position.z = hero_pos.z
+
+        Ability.CastPosition(item, cast_position)
     else
         return false
     end
