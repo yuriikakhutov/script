@@ -17,7 +17,7 @@ local ITEM_DEFINITIONS = {
         icon = "panorama/images/items/glimmer_cape_png.vtex_c",
         display_name = "Glimmer Cape",
         type = "target",
-        modifier = "modifier_item_glimmer_cape",
+        modifier = "modifier_item_glimmer_cape_fade",
     },
     ghost = {
         item_name = "item_ghost",
