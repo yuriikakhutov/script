@@ -7,6 +7,7 @@ local HERO_ICON = "panorama/images/heroes/icons/" .. HERO_NAME .. "_png.vtex_c"
 local ORDER_IDENTIFIER = "bristleback_auto_back_order"
 
 local tab = Menu.Create("Heroes", "Bristleback", "Auto Back")
+tab:Icon(HERO_ICON)
 local general_group = tab:Create("General")
 local behavior_group = tab:Create("Behavior")
 local awareness_group = tab:Create("Awareness")
@@ -42,6 +43,7 @@ ui.include_illusions = awareness_group:Switch("Include illusions", false, HERO_I
 ui.max_priority = awareness_group:Slider("Maximum priority value", 1, 10, 10, function(value)
     return string.format("≤ %d", value)
 end)
+ui.render_status = awareness_group:Switch("Render status", false, HERO_ICON)
 
 ui.enabled:ToolTip("Automatically keep Bristleback's rear toward nearby enemies when idle.")
 ui.radius:ToolTip("Maximum distance to scan for enemy heroes.")
@@ -58,6 +60,7 @@ ui.sticky_time:ToolTip("Keep focusing the same enemy for the configured duration
 ui.ignore_invisible:ToolTip("Ignore enemies that are currently not visible.")
 ui.include_illusions:ToolTip("Allow illusion heroes to be considered as threats.")
 ui.max_priority:ToolTip("Enemies with a higher manual priority value are ignored.")
+ui.render_status:ToolTip("Draw the current automation state above Bristleback.")
 
 local enemy_controls = {}
 local next_priority_seed = 1
@@ -67,11 +70,38 @@ local last_auto_order_time = -1000
 local pending_hold_time = 0
 local tracked_target = nil
 local tracked_target_expire = 0
+local status_font = Render.LoadFont("MuseoSansEx", Enum.FontCreate.FONTFLAG_OUTLINE)
 
 local function clamp(value, min_value, max_value)
     if value < min_value then return min_value end
     if value > max_value then return max_value end
     return value
+end
+
+local function is_entity_moving(entity)
+    if NPC.IsRunning then
+        return NPC.IsRunning(entity)
+    end
+    if Entity.IsMoving then
+        return Entity.IsMoving(entity)
+    end
+    if Entity.GetVelocity then
+        local velocity = Entity.GetVelocity(entity)
+        if velocity then
+            return velocity:Length2D() > 5
+        end
+    end
+    return false
+end
+
+local function is_entity_turning(entity)
+    if NPC.IsTurning then
+        return NPC.IsTurning(entity)
+    end
+    if Entity.IsTurning then
+        return Entity.IsTurning(entity)
+    end
+    return false
 end
 
 local function get_display_name(unit_name)
@@ -114,6 +144,9 @@ local function refresh_enemy_controls(local_hero, current_time)
                         return string.format("#%d", value)
                     end)
                     priority_slider:ToolTip("Lower numbers are handled first when multiple enemies are nearby.")
+                    enable_switch:SetCallback(function()
+                        priority_slider:Disabled(not enable_switch:Get())
+                    end, true)
                     enemy_controls[unit_name] = {
                         hero = hero,
                         switch = enable_switch,
@@ -137,10 +170,10 @@ local function refresh_enemy_controls(local_hero, current_time)
 end
 
 local function should_pause_for_player(local_hero)
-    if ui.pause_running:Get() and NPC.IsRunning(local_hero) then return true end
+    if ui.pause_running:Get() and is_entity_moving(local_hero) then return true end
     if ui.pause_attacking:Get() and NPC.IsAttacking(local_hero) then return true end
     if ui.pause_casting:Get() and NPC.IsChannellingAbility(local_hero) then return true end
-    if ui.pause_turning:Get() and NPC.IsTurning(local_hero) then return true end
+    if ui.pause_turning:Get() and is_entity_turning(local_hero) then return true end
     return false
 end
 
@@ -182,27 +215,28 @@ local function select_target(local_hero)
     local hero_position = Entity.GetAbsOrigin(local_hero)
     local detection_radius = ui.radius:Get()
 
-    local enemies = Entity.GetHeroesInRadius(local_hero, detection_radius, Enum.TeamType.TEAM_ENEMY, true, true)
-    if not enemies or #enemies == 0 then
-        return nil
-    end
-
     local best_target = nil
     local best_priority = math.huge
     local best_distance = math.huge
 
-    for i = 1, #enemies do
-        local enemy = enemies[i]
-        if enemy_is_valid(enemy) and passes_awareness_filters(enemy) then
-            local unit_name = NPC.GetUnitName(enemy)
-            local controls = enemy_controls[unit_name]
-            local priority = controls and controls.slider:Get() or math.huge
-            local distance = Entity.GetAbsOrigin(enemy):Distance2D(hero_position)
+    local heroes = Heroes.GetAll()
+    for i = 1, #heroes do
+        local enemy = heroes[i]
+        if enemy and enemy ~= local_hero and Entity.IsHero(enemy) and not Entity.IsSameTeam(enemy, local_hero) then
+            local delta = Entity.GetAbsOrigin(enemy) - hero_position
+            local distance = delta:Length2D()
+            if distance <= detection_radius then
+                if enemy_is_valid(enemy) and passes_awareness_filters(enemy) then
+                    local unit_name = NPC.GetUnitName(enemy)
+                    local controls = enemy_controls[unit_name]
+                    local priority = controls and controls.slider:Get() or math.huge
 
-            if priority < best_priority or (priority == best_priority and distance < best_distance) then
-                best_target = enemy
-                best_priority = priority
-                best_distance = distance
+                    if priority < best_priority or (priority == best_priority and distance < best_distance) then
+                        best_target = enemy
+                        best_priority = priority
+                        best_distance = distance
+                    end
+                end
             end
         end
     end
@@ -311,7 +345,7 @@ function bristle_auto_back.OnUpdate()
             target = nil
             tracked_target = nil
         else
-            local distance = Entity.GetAbsOrigin(target):Distance2D(hero_position)
+            local distance = (Entity.GetAbsOrigin(target) - hero_position):Length2D()
             if distance > ui.radius:Get() + 50 then
                 target = nil
                 tracked_target = nil
@@ -361,6 +395,40 @@ function bristle_auto_back.OnUpdate()
         tracked_target = target
         tracked_target_expire = current_time + (ui.sticky_time:Get() / 1000.0)
     end
+end
+
+function bristle_auto_back.OnDraw()
+    if not ui.render_status:Get() then
+        return
+    end
+
+    local local_hero = Heroes.GetLocal()
+    if not local_hero or NPC.GetUnitName(local_hero) ~= HERO_NAME then
+        return
+    end
+
+    local origin = Entity.GetAbsOrigin(local_hero)
+    local screen = Render.WorldToScreen(origin + Vector(0, 0, 210))
+    if not screen then
+        return
+    end
+
+    local status_text
+    if not ui.enabled:Get() then
+        status_text = "Auto back: disabled"
+    elseif tracked_target and passes_awareness_filters(tracked_target) then
+        local unit_name = NPC.GetUnitName(tracked_target)
+        local controls = unit_name and enemy_controls[unit_name]
+        local display_name = unit_name and get_display_name(unit_name) or "Enemy"
+        local priority = controls and controls.slider:Get() or 0
+        status_text = string.format("Auto back → %s (#%d)", display_name, priority)
+    else
+        status_text = "Auto back: searching"
+    end
+
+    local pos = Vec2(math.floor(screen.x), math.floor(screen.y))
+    Render.Text(status_font, 16, status_text, Vec2(pos.x + 1, pos.y + 1), Color(0, 0, 0, 180))
+    Render.Text(status_font, 16, status_text, pos, Color(245, 245, 247, 255))
 end
 
 return bristle_auto_back
