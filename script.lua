@@ -1,10 +1,9 @@
 ---@diagnostic disable: undefined-global, lowercase-global
 
-local pudge_tp_hook = {}
+local bristle_auto_back = {}
 
-local HERO_NAME = "npc_dota_hero_pudge"
+local HERO_NAME = "npc_dota_hero_bristleback"
 local HERO_ICON = "panorama/images/heroes/icons/" .. HERO_NAME .. "_png.vtex_c"
-local HOOK_ABILITY_NAME = "pudge_meat_hook"
 
 local function safe_menu_create(...)
     local ok, menu = pcall(Menu.Create, ...)
@@ -20,11 +19,16 @@ local function safe_icon(target, icon)
     end
 end
 
+local function safe_tooltip(control, text)
+    if control and control.ToolTip then
+        pcall(control.ToolTip, control, text)
+    end
+end
+
 local function create_group(parent, label, order)
     if not parent then
         return nil
     end
-
     if parent.Create then
         local ok, group
         if order ~= nil then
@@ -32,21 +36,16 @@ local function create_group(parent, label, order)
         else
             ok, group = pcall(parent.Create, parent, label)
         end
-
         if ok and group then
             return group
         end
     end
-
     return parent
 end
 
-local automation_tab = safe_menu_create("Heroes", "Hero List", "Pudge", "Auto Hook", "Teleport")
+local automation_tab = safe_menu_create("Heroes", "Hero List", "Bristleback", "Auto Back")
 if not automation_tab then
-    automation_tab = safe_menu_create("Heroes", "Hero List", "Pudge", "Auto Hook")
-end
-if not automation_tab then
-    automation_tab = safe_menu_create("Heroes", "Hero List", "Pudge")
+    automation_tab = safe_menu_create("Heroes", "Hero List", "Bristleback")
 end
 if not automation_tab then
     automation_tab = safe_menu_create("Heroes")
@@ -54,56 +53,60 @@ end
 safe_icon(automation_tab, HERO_ICON)
 
 local general_group = create_group(create_group(automation_tab, "General", 1), "Settings", 1) or automation_tab
-local timing_group = create_group(create_group(automation_tab, "Timing", 2), "Adjustments", 1) or automation_tab
-local filters_group = create_group(create_group(automation_tab, "Filters", 3), "Targets", 1) or automation_tab
+local behavior_group = create_group(create_group(automation_tab, "Behavior", 2), "Turning", 1) or automation_tab
+local awareness_group = create_group(create_group(automation_tab, "Awareness", 3), "Filters", 1) or automation_tab
 
-local priority_tab = safe_menu_create("Heroes", "Hero List", "Pudge", "Auto Hook", "Manual Priority")
+local priority_tab = safe_menu_create("Heroes", "Hero List", "Bristleback", "Auto Back", "Manual Priority")
 if not priority_tab then
     priority_tab = automation_tab
 end
 safe_icon(priority_tab, HERO_ICON)
-local priority_group = create_group(create_group(priority_tab, "Enemy Targets", 4), "List", 1) or priority_tab
+local priority_group = create_group(create_group(priority_tab, "Enemy Heroes", 4), "List", 1) or priority_tab
+
+local function format_seconds_ms(value)
+    return string.format("%.1f s", value / 1000)
+end
 
 local ui = {}
-ui.enabled = general_group:Switch("Enable teleport hook", true, HERO_ICON)
-ui.pause_after_manual = general_group:Slider("Pause after manual orders", 0, 2000, 650, function(value)
-    return string.format("%.1f s", value / 1000)
-end)
-ui.same_target_cooldown = general_group:Slider("Same target cooldown", 0, 4000, 1500, function(value)
-    return string.format("%.1f s", value / 1000)
-end)
+ui.enabled = general_group:Switch("Enable auto back", true, HERO_ICON)
+ui.idle_delay = general_group:Slider("Idle delay", 0, 2000, 400, format_seconds_ms)
+ui.manual_pause = general_group:Slider("Pause after manual orders", 0, 2000, 600, format_seconds_ms)
+ui.require_priority = general_group:Switch("Require manual priority", false)
 
-ui.channel_cast_delay = timing_group:Slider("Channel hook delay", 0, 1000, 200, function(value)
+ui.radius = behavior_group:Slider("Detection radius", 300, 1800, 900, "%d")
+ui.turn_distance = behavior_group:Slider("Turn offset distance", 0, 300, 140, "%d")
+ui.hold_delay = behavior_group:Slider("Hold delay after move", 0, 1000, 200, format_seconds_ms)
+ui.reissue_delay = behavior_group:Slider("Reissue interval", 50, 1000, 250, function(value)
     return string.format("%d ms", value)
 end)
-ui.cast_lead = timing_group:Slider("Hook lead adjustment", -400, 400, 50, function(value)
-    return string.format("%d ms", value)
-end)
-ui.max_distance = timing_group:Slider("Maximum hook distance", 800, 1800, 1400, "%d")
-ui.min_distance = timing_group:Slider("Minimum hook distance", 0, 600, 0, "%d")
+ui.stick_time = behavior_group:Slider("Stick with current target", 0, 3000, 1000, format_seconds_ms)
 
-ui.require_visible = filters_group:Switch("Require visible target", false)
-ui.ignore_illusions = filters_group:Switch("Ignore illusions", true)
-ui.require_priority = filters_group:Switch("Only hook prioritized enemies", false)
+ui.require_visible = awareness_group:Switch("Require visible enemies", false)
+ui.ignore_illusions = awareness_group:Switch("Ignore illusions", true)
+ui.face_only_alive = awareness_group:Switch("Only consider alive heroes", true)
 
-ui.enabled:ToolTip("Automatically casts Meat Hook at the end location of enemy teleports.")
-ui.pause_after_manual:ToolTip("Delay automation after you manually issue an order to Pudge.")
-ui.same_target_cooldown:ToolTip("Prevent re-hook attempts on the same enemy within this cooldown window.")
-ui.channel_cast_delay:ToolTip("Delay after a teleport starts before throwing the hook to cancel the channel.")
-ui.cast_lead:ToolTip("Timing adjustment applied before the teleport completes. Positive values fire earlier.")
-ui.max_distance:ToolTip("Skip teleports that land beyond this distance from Pudge.")
-ui.min_distance:ToolTip("Skip teleports that land closer than this distance from Pudge.")
-ui.require_visible:ToolTip("Only hook when the destination is visible to your team.")
-ui.ignore_illusions:ToolTip("Ignore teleporting illusions when deciding to hook.")
-ui.require_priority:ToolTip("Only hook enemies that are enabled in the manual priority list.")
+safe_tooltip(ui.enabled, "Automatically turns Bristleback so his back faces dangerous enemies while you are idle.")
+safe_tooltip(ui.idle_delay, "Time you must remain idle before the automation can turn Bristleback.")
+safe_tooltip(ui.manual_pause, "Delay the automation after you issue manual orders or move commands.")
+safe_tooltip(ui.require_priority, "Only react to enemies that are enabled in the manual priority list.")
+safe_tooltip(ui.radius, "Maximum distance to scan for threatening enemy heroes.")
+safe_tooltip(ui.turn_distance, "How far a move command is issued to rotate Bristleback's facing away from the enemy.")
+safe_tooltip(ui.hold_delay, "Delay before issuing a hold order after the turning move.")
+safe_tooltip(ui.reissue_delay, "Minimum time between automated move orders toward the same enemy.")
+safe_tooltip(ui.stick_time, "Keep focusing the same enemy for this duration before switching to a new target.")
+safe_tooltip(ui.require_visible, "Ignore enemies that are not currently visible to your team.")
+safe_tooltip(ui.ignore_illusions, "Filter out enemy illusions from consideration.")
+safe_tooltip(ui.face_only_alive, "Skip enemies that are dead or have not yet spawned.")
 
 local enemy_controls = {}
 local last_priority_refresh = -1
-local processed_teleport_indices = {}
-local canceled_teleport_indices = {}
-local recent_hook_times = {}
-local pending_targets = {}
 local last_manual_order_time = -math.huge
+local last_move_time = -math.huge
+local last_turn_time = -math.huge
+local last_position = nil
+local pending_hold_time = nil
+local current_target_key = nil
+local current_target_until = -math.huge
 
 local function now()
     if GameRules and GameRules.GetGameTime then
@@ -116,103 +119,86 @@ local function is_enemy_hero(me, ent)
     if not me or not ent then
         return false
     end
-    if not Entity.IsHero(ent) or not Entity.IsAlive(ent) then
+    if not Entity.IsHero(ent) then
+        return false
+    end
+    if ui.face_only_alive:Get() and not Entity.IsAlive(ent) then
         return false
     end
     return Entity.GetTeamNum(ent) ~= Entity.GetTeamNum(me)
+end
+
+local function is_entity_illusion(ent)
+    if not ent then
+        return false
+    end
+    if NPC and NPC.IsIllusion then
+        local ok, result = pcall(NPC.IsIllusion, ent)
+        if ok then
+            return result and true or false
+        end
+    end
+    return false
 end
 
 local function is_entity_visible(ent)
     if not ent then
         return false
     end
-    if Entity.IsDormant then
-        return not Entity.IsDormant(ent)
+    if Entity and Entity.IsDormant then
+        local ok, dormant = pcall(Entity.IsDormant, ent)
+        if ok and dormant then
+            return false
+        end
+    end
+    if NPC and NPC.IsVisible then
+        local ok, visible = pcall(NPC.IsVisible, ent)
+        if ok then
+            return visible and true or false
+        end
+    end
+    if Entity and Entity.IsVisible then
+        local ok, visible = pcall(Entity.IsVisible, ent)
+        if ok then
+            return visible and true or false
+        end
     end
     return true
-end
-
-local function is_entity_illusion(ent)
-    if not ent or not NPC.IsHero then
-        return false
-    end
-    if NPC.IsIllusion then
-        return NPC.IsIllusion(ent)
-    end
-    return false
 end
 
 local function vector_distance(a, b)
     if not a or not b then
         return math.huge
     end
-    local ax, ay = a.x or 0, a.y or 0
-    local bx, by = b.x or 0, b.y or 0
-    local dx = ax - bx
-    local dy = ay - by
+    local dx = (a.x or 0) - (b.x or 0)
+    local dy = (a.y or 0) - (b.y or 0)
     return math.sqrt(dx * dx + dy * dy)
 end
 
-local function get_hook_ability(hero)
-    if not hero then
-        return nil
-    end
-    return NPC.GetAbility(hero, HOOK_ABILITY_NAME)
+local function vector_sub(a, b)
+    return { x = (a.x or 0) - (b.x or 0), y = (a.y or 0) - (b.y or 0), z = (a.z or 0) - (b.z or 0) }
 end
 
-local function get_hook_range(hero, ability)
-    ability = ability or get_hook_ability(hero)
-    if not ability then
-        return 0
-    end
-    local level = Ability.GetLevel and Ability.GetLevel(ability) or 0
-    if not level or level <= 0 then
-        return 0
-    end
-    local range = Ability.GetLevelSpecialValueFor and Ability.GetLevelSpecialValueFor(ability, "hook_distance", level - 1)
-    if not range or range <= 0 then
-        if Ability.GetCastRange then
-            range = Ability.GetCastRange(ability)
-        end
-    end
-    if not range or range <= 0 then
-        range = 1300
-    end
-    return range
+local function vector_length(v)
+    return math.sqrt((v.x or 0) ^ 2 + (v.y or 0) ^ 2)
 end
 
-local function get_hook_speed(ability)
-    if not ability then
-        return 1600
+local function vector_normalize(v)
+    local length = vector_length(v)
+    if length <= 0 then
+        return { x = 0, y = 0, z = 0 }, 0
     end
-    local level = Ability.GetLevel and Ability.GetLevel(ability) or 0
-    if level and level > 0 and Ability.GetLevelSpecialValueFor then
-        local value = Ability.GetLevelSpecialValueFor(ability, "hook_speed", level - 1)
-        if value and value > 0 then
-            return value
-        end
-    end
-    return 1600
-end
-
-local function get_cast_point(ability)
-    if ability and Ability.GetCastPoint then
-        local cast_point = Ability.GetCastPoint(ability)
-        if cast_point then
-            return cast_point
-        end
-    end
-    return 0.3
+    return { x = v.x / length, y = v.y / length, z = 0 }, length
 end
 
 local function enemy_control_key(ent)
     if not ent then
         return nil
     end
-    if Entity.GetPlayerOwnerID then
-        return string.format("%d", Entity.GetPlayerOwnerID(ent))
+    if Entity and Entity.GetPlayerOwnerID then
+        return tostring(Entity.GetPlayerOwnerID(ent))
     end
-    if Entity.GetIndex then
+    if Entity and Entity.GetIndex then
         return tostring(Entity.GetIndex(ent))
     end
     return NPC.GetUnitName(ent)
@@ -220,7 +206,7 @@ end
 
 local function refresh_enemy_controls(hero)
     local t = now()
-    if last_priority_refresh + 1.0 > t then
+    if last_priority_refresh + 1 > t then
         return
     end
     last_priority_refresh = t
@@ -239,15 +225,15 @@ local function refresh_enemy_controls(hero)
         return
     end
 
-    local all_heroes = Heroes.GetAll and Heroes.GetAll() or {}
-    for _, enemy in ipairs(all_heroes) do
+    local all = Heroes.GetAll and Heroes.GetAll() or {}
+    for _, enemy in ipairs(all) do
         if is_enemy_hero(local_hero, enemy) then
             local key = enemy_control_key(enemy)
             if key and not enemy_controls[key] then
                 local display_name = NPC.GetUnitName(enemy)
                 if Engine and Engine.GetDisplayNameByUnitName then
-                    local friendly = Engine.GetDisplayNameByUnitName(display_name)
-                    if friendly then
+                    local ok, friendly = pcall(Engine.GetDisplayNameByUnitName, display_name)
+                    if ok and friendly then
                         display_name = friendly
                     end
                 end
@@ -255,9 +241,9 @@ local function refresh_enemy_controls(hero)
                 local enable = row:Switch("Enable", true)
                 local weight = row:Slider("Priority", 0, 100, 50, "%d")
                 enemy_controls[key] = {
+                    row = row,
                     enable = enable,
                     weight = weight,
-                    row = row,
                 }
             end
             existing[key] = nil
@@ -279,129 +265,83 @@ local function get_enemy_weight(ent)
     end
     local controls = enemy_controls[key]
     if not controls then
-        return ui.require_priority and 0 or 50
+        return ui.require_priority:Get() and 0 or 50
     end
-    if controls.enable and not controls.enable:Get() then
+    if controls.enable and controls.enable.Get and not controls.enable:Get() then
         return 0
     end
-    if controls.weight then
-        return controls.weight:Get() or 0
+    if controls.weight and controls.weight.Get then
+        local value = controls.weight:Get()
+        if value then
+            return value
+        end
     end
     return 50
 end
 
-local function should_consider_target(hero, target, pos)
-    if not hero or not target or not pos then
+local function should_consider(hero, enemy)
+    if not is_enemy_hero(hero, enemy) then
         return false
     end
-    if not is_enemy_hero(hero, target) then
+    if ui.ignore_illusions:Get() and is_entity_illusion(enemy) then
         return false
     end
-    if ui.ignore_illusions:Get() and is_entity_illusion(target) then
+    if ui.require_visible:Get() and not is_entity_visible(enemy) then
         return false
     end
-    if ui.require_visible:Get() and not is_entity_visible(target) then
+    if ui.require_priority:Get() and get_enemy_weight(enemy) <= 0 then
         return false
     end
-    local weight = get_enemy_weight(target)
-    if ui.require_priority:Get() and weight <= 0 then
+    local hero_pos = Entity.GetAbsOrigin(hero)
+    local enemy_pos = Entity.GetAbsOrigin(enemy)
+    if not hero_pos or not enemy_pos then
         return false
     end
-    local ability = get_hook_ability(hero)
-    if not ability then
-        return false
-    end
-    local range = math.min(get_hook_range(hero, ability), ui.max_distance:Get())
-    local origin = Entity.GetAbsOrigin(hero)
-    local distance = vector_distance(origin, pos)
-    if distance > range then
-        return false
-    end
-    if distance < ui.min_distance:Get() then
-        return false
-    end
-    local cooldown = ui.same_target_cooldown:Get() / 1000
-    local key = enemy_control_key(target)
-    if cooldown > 0 and key and recent_hook_times[key] and (now() - recent_hook_times[key]) < cooldown then
+    local distance = vector_distance(hero_pos, enemy_pos)
+    if distance > ui.radius:Get() then
         return false
     end
     return true
 end
 
-local function cleanup_index_maps()
-    local t = now()
-    for idx, ts in pairs(processed_teleport_indices) do
-        if (t - ts) > 6.0 then
-            processed_teleport_indices[idx] = nil
+local function pick_target(hero)
+    local best_enemy = nil
+    local best_score = -math.huge
+    local best_distance = math.huge
+    local hero_pos = Entity.GetAbsOrigin(hero)
+    if not hero_pos then
+        return nil
+    end
+
+    local all = Heroes.GetAll and Heroes.GetAll() or {}
+    for _, enemy in ipairs(all) do
+        if should_consider(hero, enemy) then
+            local weight = get_enemy_weight(enemy)
+            if weight > 0 then
+                local distance = vector_distance(hero_pos, Entity.GetAbsOrigin(enemy))
+                local score = weight * 1000 - distance
+                if score > best_score or (math.abs(score - best_score) < 0.001 and distance < best_distance) then
+                    best_enemy = enemy
+                    best_score = score
+                    best_distance = distance
+                end
+            end
         end
     end
-    for idx, info in pairs(canceled_teleport_indices) do
-        if (t - (info.time or 0)) > 6.0 then
-            canceled_teleport_indices[idx] = nil
-        end
-    end
-    for key, ts in pairs(recent_hook_times) do
-        if (t - ts) > 15.0 then
-            recent_hook_times[key] = nil
-        end
-    end
+    return best_enemy
 end
 
-local function clear_pending_targets()
-    pending_targets = {}
-end
-
-local function remove_target_by_index(index)
-    if not index then
-        return
-    end
-    for i = #pending_targets, 1, -1 do
-        if pending_targets[i] and pending_targets[i].index == index then
-            table.remove(pending_targets, i)
-        end
-    end
-end
-
-local function has_pending_index(index)
-    if not index then
-        return false
-    end
-    for i = 1, #pending_targets do
-        local record = pending_targets[i]
-        if record and record.index == index then
-            return true
-        end
-    end
-    return false
-end
-
-local function cast_hook(hero, ability, position)
-    if not hero or not ability or not position then
-        return false
-    end
-
-    if Ability.IsCastable and not Ability.IsCastable(ability, NPC.GetMana(hero)) then
-        return false
-    end
-    if Ability.IsInAbilityPhase and Ability.IsInAbilityPhase(ability) then
-        return false
-    end
-    if Ability.IsChannelling and Ability.IsChannelling(ability) then
-        return false
-    end
-
+local function issue_move_order(hero, position)
     local player = Players.GetLocal()
     if not player then
         return false
     end
-
-    local pos = Vector(position.x, position.y, 0)
     Player.PrepareUnitOrders(
         player,
-        Enum.UnitOrder.DOTA_UNIT_ORDER_CAST_POSITION,
+        Enum.UnitOrder.DOTA_UNIT_ORDER_MOVE_TO_POSITION,
         nil,
-        pos,
-        ability,
+        Vector(position.x, position.y, position.z or 0),
+        nil,
         Enum.PlayerOrderIssuer.DOTA_ORDER_ISSUER_HERO_ONLY,
         hero,
         false,
@@ -412,87 +352,58 @@ local function cast_hook(hero, ability, position)
     return true
 end
 
-local function schedule_target(hero, rec)
-    local ability = get_hook_ability(hero)
-    if not ability then
+local function issue_hold_order(hero)
+    local player = Players.GetLocal()
+    if not player then
         return false
     end
-
-    local pos = rec.position
-    local target = rec.target
-    if not should_consider_target(hero, target, pos) then
-        return false
-    end
-
-    local origin = Entity.GetAbsOrigin(hero)
-    if not origin then
-        return false
-    end
-
-    local distance = vector_distance(origin, pos)
-    local hook_speed = get_hook_speed(ability)
-    local travel_time = distance / math.max(hook_speed, 1)
-    local cast_point = get_cast_point(ability)
-    local current_time = now()
-    local cast_time
-    local expire_time
-
-    if rec.name == "teleport_start" then
-        local delay = (ui.channel_cast_delay:Get() or 0) / 1000
-        local start_time = rec.start_time or current_time
-        cast_time = start_time + delay - cast_point
-        expire_time = start_time + 3.6
-    else
-        local lead_adjust = (ui.cast_lead:Get() or 0) / 1000
-        local end_time = rec.end_time or (current_time + 2.5)
-        cast_time = end_time - travel_time - cast_point - lead_adjust
-        expire_time = end_time + 0.5
-    end
-
-    if cast_time < current_time then
-        cast_time = current_time
-    end
-
-    local record = {
-        target = target,
-        position = pos,
-        cast_time = cast_time,
-        expire_time = expire_time,
-        end_time = rec.end_time,
-        index = rec.index,
-        name = rec.name,
-    }
-    table.insert(pending_targets, record)
+    Player.PrepareUnitOrders(
+        player,
+        Enum.UnitOrder.DOTA_UNIT_ORDER_HOLD_POSITION,
+        nil,
+        nil,
+        nil,
+        Enum.PlayerOrderIssuer.DOTA_ORDER_ISSUER_HERO_ONLY,
+        hero,
+        false,
+        false,
+        false,
+        true
+    )
     return true
 end
 
-local function try_acquire_target(hero)
-    if not LIB_HEROES_DATA or not LIB_HEROES_DATA.teleport_time then
-        return
+local function turn_toward_enemy(hero, enemy)
+    local hero_pos = Entity.GetAbsOrigin(hero)
+    local enemy_pos = Entity.GetAbsOrigin(enemy)
+    if not hero_pos or not enemy_pos then
+        return false
     end
-
-    for idx, rec in pairs(LIB_HEROES_DATA.teleport_time) do
-        if rec and (rec.name == "teleport_start" or rec.name == "teleport_end") and not processed_teleport_indices[idx] then
-            if rec.target and rec.position then
-                rec.index = idx
-                if rec.name == "teleport_start" then
-                    rec.start_time = rec.start_time or rec.time or rec.end_time
-                end
-                if not has_pending_index(idx) then
-                    if schedule_target(hero, rec) then
-                        processed_teleport_indices[idx] = now()
-                    elseif rec.name ~= "teleport_start" then
-                        processed_teleport_indices[idx] = processed_teleport_indices[idx] or now()
-                    end
-                end
-            else
-                processed_teleport_indices[idx] = now()
-            end
-        end
+    local direction, length = vector_normalize(vector_sub(hero_pos, enemy_pos))
+    if length <= 10 then
+        return false
     end
+    local offset = ui.turn_distance:Get()
+    local target_pos = {
+        x = hero_pos.x + direction.x * offset,
+        y = hero_pos.y + direction.y * offset,
+        z = hero_pos.z or 0,
+    }
+    if issue_move_order(hero, target_pos) then
+        last_turn_time = now()
+        pending_hold_time = last_turn_time + (ui.hold_delay:Get() / 1000)
+        return true
+    end
+    return false
 end
 
-function pudge_tp_hook.OnPrepareUnitOrders(event)
+local function reset_state()
+    pending_hold_time = nil
+    current_target_key = nil
+    current_target_until = -math.huge
+end
+
+function bristle_auto_back.OnPrepareUnitOrders(event)
     if not event then
         return
     end
@@ -503,106 +414,95 @@ function pudge_tp_hook.OnPrepareUnitOrders(event)
         return
     end
     last_manual_order_time = now()
+    reset_state()
 end
 
-function pudge_tp_hook.OnUpdate()
+function bristle_auto_back.OnUpdate()
     local hero = Heroes.GetLocal()
     if not hero then
-        clear_pending_targets()
+        reset_state()
         return
     end
-
     if NPC.GetUnitName(hero) ~= HERO_NAME then
-        clear_pending_targets()
+        reset_state()
         return
     end
-
     if not ui.enabled:Get() then
-        clear_pending_targets()
-        return
-    end
-
-    local ability = get_hook_ability(hero)
-    if not ability then
-        clear_pending_targets()
-        return
-    end
-
-    local ability_level = Ability.GetLevel and Ability.GetLevel(ability) or 0
-    if ability_level <= 0 then
-        clear_pending_targets()
+        reset_state()
         return
     end
 
     refresh_enemy_controls(hero)
-    cleanup_index_maps()
-
-    if now() - last_manual_order_time < (ui.pause_after_manual:Get() / 1000) then
-        return
-    end
-
-    try_acquire_target(hero)
 
     local current_time = now()
-    local best_index = nil
-    local best_target = nil
 
-    for i = #pending_targets, 1, -1 do
-        local record = pending_targets[i]
-        local remove = false
-        if not record then
-            remove = true
-        else
-            local cancel_info = canceled_teleport_indices[record.index]
-            if cancel_info then
-                remove = true
-            else
-                local target = record.target
-                if not target or not Entity.IsAlive(target) then
-                    remove = true
-                elseif ui.ignore_illusions:Get() and is_entity_illusion(target) then
-                    remove = true
-                elseif record.expire_time and current_time > record.expire_time then
-                    remove = true
-                end
+    local hero_pos = Entity.GetAbsOrigin(hero)
+    if hero_pos then
+        if last_position then
+            local distance = vector_distance(hero_pos, last_position)
+            if distance > 5 then
+                last_move_time = current_time
             end
+        else
+            last_move_time = current_time
         end
+        last_position = hero_pos
+    end
 
-        if remove then
-            table.remove(pending_targets, i)
+    if pending_hold_time and current_time >= pending_hold_time then
+        if issue_hold_order(hero) then
+            pending_hold_time = nil
         else
-            if not best_target or (record.cast_time or math.huge) < (best_target.cast_time or math.huge) then
-                best_target = record
-                best_index = i
-            end
+            pending_hold_time = current_time + 0.2
         end
     end
 
-    if not best_target then
+    local pause_until = math.max(last_manual_order_time + (ui.manual_pause:Get() / 1000), last_move_time + (ui.idle_delay:Get() / 1000))
+    if current_time < pause_until then
         return
     end
 
-    if current_time + 0.01 < (best_target.cast_time or 0) then
+    if NPC and NPC.IsChannelling and NPC.IsChannelling(hero) then
+        return
+    end
+    if NPC and NPC.IsStunned and NPC.IsStunned(hero) then
         return
     end
 
-    if cast_hook(hero, ability, best_target.position) then
-        local key = enemy_control_key(best_target.target)
-        if key then
-            recent_hook_times[key] = current_time
+    local target = nil
+    if current_target_key and current_time <= current_target_until then
+        local all = Heroes.GetAll and Heroes.GetAll() or {}
+        for _, enemy in ipairs(all) do
+            if enemy_control_key(enemy) == current_target_key and should_consider(hero, enemy) then
+                target = enemy
+                break
+            end
         end
-        table.remove(pending_targets, best_index)
-    else
-        pending_targets[best_index].cast_time = current_time + 0.05
+    end
+
+    if not target then
+        target = pick_target(hero)
+    end
+
+    if not target then
+        reset_state()
+        return
+    end
+
+    local key = enemy_control_key(target)
+    if not key then
+        return
+    end
+
+    local reissue_window = ui.reissue_delay:Get() / 1000
+    if current_target_key == key and (now() - last_turn_time) < reissue_window then
+        return
+    end
+
+    if turn_toward_enemy(hero, target) then
+        current_target_key = key
+        current_target_until = now() + (ui.stick_time:Get() / 1000)
     end
 end
 
-function pudge_tp_hook.OnParticleDestroy(data)
-    if not data then
-        return
-    end
-    canceled_teleport_indices[data.index] = { time = now() }
-    remove_target_by_index(data.index)
-end
-
-return pudge_tp_hook
+return bristle_auto_back
