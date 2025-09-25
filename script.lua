@@ -453,6 +453,35 @@ local function get_escape_direction(hero, ability, definition)
     return direction, enemy
 end
 
+local ESCAPE_TURN_DELAY = 0.2
+local pending_escape_casts = {}
+
+local function clear_pending_escape(item_key)
+    pending_escape_casts[item_key] = nil
+end
+
+local function needs_new_escape(direction, enemy, pending)
+    if not pending then
+        return true
+    end
+
+    if pending.enemy ~= enemy then
+        return true
+    end
+
+    local pending_dir = pending.direction
+    if not pending_dir or not direction then
+        return true
+    end
+
+    local dot = pending_dir.x * direction.x + pending_dir.y * direction.y
+    if dot < 0.95 then
+        return true
+    end
+
+    return false
+end
+
 local function cast_item(hero, item_key, game_time)
     local definition = ITEM_DEFINITIONS[item_key]
     if not definition then
@@ -517,13 +546,34 @@ local function cast_item(hero, item_key, game_time)
 
         Ability.CastPosition(item, target_pos)
     elseif definition.type == "escape_self" then
-        local direction = get_escape_direction(hero, item, definition)
+        local direction, enemy = get_escape_direction(hero, item, definition)
         if not direction then
+            clear_pending_escape(item_key)
             return false
         end
 
-        face_direction(hero, direction)
+        local pending = pending_escape_casts[item_key]
+
+        if needs_new_escape(direction, enemy, pending) then
+            pending_escape_casts[item_key] = {
+                ready_time = game_time + ESCAPE_TURN_DELAY,
+                direction = direction,
+                enemy = enemy,
+            }
+            face_direction(hero, direction)
+            return false
+        end
+
+        pending.direction = direction
+
+        if game_time < pending.ready_time then
+            face_direction(hero, pending.direction)
+            return false
+        end
+
+        face_direction(hero, pending.direction)
         Ability.CastTarget(item, hero)
+        clear_pending_escape(item_key)
     elseif definition.type == "escape_position" then
         local direction = get_escape_direction(hero, item, definition)
         if not direction then
@@ -556,6 +606,7 @@ end
 function auto_defender.OnUpdate()
     if not Engine.IsInGame() then
         last_cast_times = {}
+        pending_escape_casts = {}
         return
     end
 
@@ -565,6 +616,7 @@ function auto_defender.OnUpdate()
 
     local hero = Heroes.GetLocal()
     if not hero or NPC.IsIllusion(hero) or not Entity.IsAlive(hero) or Entity.IsDormant(hero) then
+        pending_escape_casts = {}
         return
     end
 
@@ -593,6 +645,7 @@ end
 
 function auto_defender.OnGameEnd()
     last_cast_times = {}
+    pending_escape_casts = {}
 end
 
 return auto_defender
