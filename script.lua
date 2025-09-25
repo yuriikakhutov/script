@@ -3,6 +3,24 @@
 local auto_defender = {}
 
 local tab = Menu.Create("General", "Auto Defender", "Auto Defender", "Auto Defender")
+local info_group = tab:Create("Info", 0)
+if info_group.Label then
+    info_group:Label("Author: GhostyPowa")
+elseif info_group.Text then
+    info_group:Text("Author: GhostyPowa")
+else
+    local author_display = info_group:Switch("Author: GhostyPowa", false)
+    if author_display then
+        if author_display.SetEnabled then
+            author_display:SetEnabled(false)
+        elseif author_display.Disable then
+            author_display:Disable()
+        elseif author_display.SetState then
+            author_display:SetState(false)
+        end
+    end
+end
+
 local activation_group = tab:Create("Activation")
 local priority_group = tab:Create("Item Priority", 1)
 local threshold_group = tab:Create("Item Thresholds", 2)
@@ -196,7 +214,7 @@ local ITEM_DEFINITIONS = {
         item_name = "item_blood_grenade",
         icon = "panorama/images/items/blood_grenade_png.vtex_c",
         display_name = "Blood Grenade",
-        type = "target_enemy",
+        type = "position_enemy",
         enemy_modifier = "modifier_item_blood_grenade_slow",
         range = 900,
         requires_charges = true,
