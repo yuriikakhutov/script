@@ -171,6 +171,51 @@ local ITEM_DEFINITIONS = {
         type = "target_self",
         modifier = "modifier_item_ethereal_blade_ethereal",
     },
+    nullifier = {
+        item_name = "item_nullifier",
+        icon = "panorama/images/items/nullifier_png.vtex_c",
+        display_name = "Nullifier",
+        type = "target_enemy",
+        enemy_modifier = "modifier_item_nullifier_mute",
+        range = 900,
+    },
+    dagon = {
+        item_names = {
+            "item_dagon",
+            "item_dagon_2",
+            "item_dagon_3",
+            "item_dagon_4",
+            "item_dagon_5",
+        },
+        icon = "panorama/images/items/dagon_png.vtex_c",
+        display_name = "Dagon",
+        type = "target_enemy",
+        range = 900,
+    },
+    blood_grenade = {
+        item_name = "item_blood_grenade",
+        icon = "panorama/images/items/blood_grenade_png.vtex_c",
+        display_name = "Blood Grenade",
+        type = "target_enemy",
+        enemy_modifier = "modifier_item_blood_grenade_slow",
+        requires_charges = true,
+    },
+    urn = {
+        item_name = "item_urn_of_shadows",
+        icon = "panorama/images/items/urn_of_shadows_png.vtex_c",
+        display_name = "Urn of Shadows",
+        type = "target_self",
+        modifier = "modifier_item_urn_heal",
+        requires_charges = true,
+    },
+    spirit_vessel = {
+        item_name = "item_spirit_vessel",
+        icon = "panorama/images/items/spirit_vessel_png.vtex_c",
+        display_name = "Spirit Vessel",
+        type = "target_self",
+        modifier = "modifier_item_spirit_vessel_heal",
+        requires_charges = true,
+    },
     blink = {
         item_name = "item_blink",
         icon = "panorama/images/items/blink_png.vtex_c",
@@ -240,6 +285,11 @@ local priority_items = {
     { "disperser", ITEM_DEFINITIONS.disperser.icon, false },
     { "pipe", ITEM_DEFINITIONS.pipe.icon, false },
     { "ethereal", ITEM_DEFINITIONS.ethereal.icon, false },
+    { "nullifier", ITEM_DEFINITIONS.nullifier.icon, false },
+    { "dagon", ITEM_DEFINITIONS.dagon.icon, false },
+    { "blood_grenade", ITEM_DEFINITIONS.blood_grenade.icon, false },
+    { "urn", ITEM_DEFINITIONS.urn.icon, false },
+    { "spirit_vessel", ITEM_DEFINITIONS.spirit_vessel.icon, false },
     { "blink", ITEM_DEFINITIONS.blink.icon, false },
     { "overwhelming_blink", ITEM_DEFINITIONS.overwhelming_blink.icon, false },
     { "swift_blink", ITEM_DEFINITIONS.swift_blink.icon, false },
@@ -327,6 +377,23 @@ local function get_enabled_items()
     end
 
     return enabled
+end
+
+local function get_inventory_item(hero, definition)
+    if definition.item_name then
+        return NPC.GetItem(hero, definition.item_name, true)
+    end
+
+    if definition.item_names then
+        for _, name in ipairs(definition.item_names) do
+            local item = NPC.GetItem(hero, name, true)
+            if item then
+                return item
+            end
+        end
+    end
+
+    return nil
 end
 
 local function get_effective_cast_range(hero, ability, definition)
@@ -543,7 +610,7 @@ local function cast_item(hero, item_key, game_time)
         return false
     end
 
-    local item = NPC.GetItem(hero, definition.item_name, true)
+    local item = get_inventory_item(hero, definition)
     if not item then
         return false
     end
@@ -554,6 +621,13 @@ local function cast_item(hero, item_key, game_time)
 
     if not Ability.IsReady(item) then
         return false
+    end
+
+    if definition.requires_charges then
+        local charges = Ability.GetCurrentCharges(item)
+        if not charges or charges <= 0 then
+            return false
+        end
     end
 
     local mana = NPC.GetMana(hero)
