@@ -601,9 +601,83 @@ end
 
 local ESCAPE_TURN_DELAY = 0.2
 local pending_escape_casts = {}
+local escape_input_blockers = {}
+local escape_input_blocked = false
+
+local function apply_input_block_state(blocked)
+    if blocked == escape_input_blocked then
+        return
+    end
+
+    if Input then
+        if Input.BlockInput then
+            Input.BlockInput(blocked)
+        end
+
+        local enable_state = not blocked
+
+        if Input.SetInputEnabled then
+            Input.SetInputEnabled(enable_state)
+        end
+
+        if Input.SetEnabled then
+            Input.SetEnabled(enable_state)
+        end
+
+        if Input.SetGameInputEnabled then
+            Input.SetGameInputEnabled(enable_state)
+        end
+    end
+
+    if Engine then
+        if Engine.BlockInput then
+            Engine.BlockInput(blocked)
+        end
+
+        local enable_state = not blocked
+
+        if Engine.SetInputEnabled then
+            Engine.SetInputEnabled(enable_state)
+        end
+
+        if Engine.SetGameInputEnabled then
+            Engine.SetGameInputEnabled(enable_state)
+        end
+    end
+
+    escape_input_blocked = blocked
+end
+
+local function refresh_escape_input_block()
+    for _, active in pairs(escape_input_blockers) do
+        if active then
+            apply_input_block_state(true)
+            return
+        end
+    end
+
+    apply_input_block_state(false)
+end
+
+local function set_escape_input_block(item_key, enabled)
+    if enabled then
+        escape_input_blockers[item_key] = true
+    else
+        escape_input_blockers[item_key] = nil
+    end
+
+    refresh_escape_input_block()
+end
 
 local function clear_pending_escape(item_key)
     pending_escape_casts[item_key] = nil
+    set_escape_input_block(item_key, false)
+end
+
+local function reset_escape_states()
+    pending_escape_casts = {}
+    escape_input_blockers = {}
+    apply_input_block_state(false)
 end
 
 local function needs_new_escape(direction, enemy, pending)
@@ -634,36 +708,59 @@ local function cast_item(hero, item_key, game_time)
         return false
     end
 
+    local is_escape_item = definition.type == "escape_self"
+
     if is_recently_cast(item_key, game_time) then
+        if is_escape_item then
+            clear_pending_escape(item_key)
+        end
         return false
     end
 
     local item = get_inventory_item(hero, definition)
     if not item then
+        if is_escape_item then
+            clear_pending_escape(item_key)
+        end
         return false
     end
 
     if definition.modifier and NPC.HasModifier(hero, definition.modifier) then
+        if is_escape_item then
+            clear_pending_escape(item_key)
+        end
         return false
     end
 
     if not Ability.IsReady(item) then
+        if is_escape_item then
+            clear_pending_escape(item_key)
+        end
         return false
     end
 
     if definition.requires_charges then
         local charges = Ability.GetCurrentCharges(item)
         if not charges or charges <= 0 then
+            if is_escape_item then
+                clear_pending_escape(item_key)
+            end
             return false
         end
     end
 
     local mana = NPC.GetMana(hero)
     if not Ability.IsCastable(item, mana) then
+        if is_escape_item then
+            clear_pending_escape(item_key)
+        end
         return false
     end
 
     if not can_use_item(hero) then
+        if is_escape_item then
+            clear_pending_escape(item_key)
+        end
         return false
     end
 
@@ -671,6 +768,9 @@ local function cast_item(hero, item_key, game_time)
         local range = get_effective_cast_range(hero, item, definition)
         local enemies = Entity.GetHeroesInRadius(hero, range, Enum.TeamType.TEAM_ENEMY, true, true)
         if not enemies or #enemies == 0 then
+            if is_escape_item then
+                clear_pending_escape(item_key)
+            end
             return false
         end
     end
@@ -713,6 +813,7 @@ local function cast_item(hero, item_key, game_time)
                 direction = direction,
                 enemy = enemy,
             }
+            set_escape_input_block(item_key, true)
             face_direction(hero, direction)
             return false
         end
@@ -759,17 +860,18 @@ end
 function auto_defender.OnUpdate()
     if not Engine.IsInGame() then
         last_cast_times = {}
-        pending_escape_casts = {}
+        reset_escape_states()
         return
     end
 
     if not ui.enable:Get() then
+        reset_escape_states()
         return
     end
 
     local hero = Heroes.GetLocal()
     if not hero or NPC.IsIllusion(hero) or not Entity.IsAlive(hero) or Entity.IsDormant(hero) then
-        pending_escape_casts = {}
+        reset_escape_states()
         return
     end
 
@@ -785,6 +887,7 @@ function auto_defender.OnUpdate()
     local items_to_use = get_enabled_items()
 
     if #items_to_use == 0 then
+        reset_escape_states()
         return
     end
 
@@ -798,7 +901,11 @@ end
 
 function auto_defender.OnGameEnd()
     last_cast_times = {}
-    pending_escape_casts = {}
+    reset_escape_states()
+end
+
+function auto_defender.OnScriptUnload()
+    reset_escape_states()
 end
 
 return auto_defender
