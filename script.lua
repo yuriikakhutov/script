@@ -211,6 +211,7 @@ local ITEM_DEFINITIONS = {
         enemy_toggle = true,
         enemy_required_default = true,
         blink_range = 1200,
+        blocked_modifiers = { "modifier_blink_dagger", "modifier_blink_dagger_cooldown" },
         category = "escape",
     },
     {
@@ -223,6 +224,7 @@ local ITEM_DEFINITIONS = {
         enemy_toggle = true,
         enemy_required_default = true,
         blink_range = 1200,
+        blocked_modifiers = { "modifier_blink_dagger", "modifier_blink_dagger_cooldown" },
         category = "escape",
     },
     {
@@ -235,6 +237,7 @@ local ITEM_DEFINITIONS = {
         enemy_toggle = true,
         enemy_required_default = true,
         blink_range = 1200,
+        blocked_modifiers = { "modifier_blink_dagger", "modifier_blink_dagger_cooldown" },
         category = "escape",
     },
     {
@@ -247,6 +250,7 @@ local ITEM_DEFINITIONS = {
         enemy_toggle = true,
         enemy_required_default = true,
         blink_range = 1200,
+        blocked_modifiers = { "modifier_blink_dagger", "modifier_blink_dagger_cooldown" },
         category = "escape",
     },
     {
@@ -573,6 +577,26 @@ local function find_item(hero, names)
     return nil
 end
 
+local function has_blocked_modifier(def, hero)
+    if not def or not hero then
+        return false
+    end
+
+    if def.blocked_modifier and NPC.HasModifier(hero, def.blocked_modifier) then
+        return true
+    end
+
+    if def.blocked_modifiers then
+        for _, modifier in ipairs(def.blocked_modifiers) do
+            if NPC.HasModifier(hero, modifier) then
+                return true
+            end
+        end
+    end
+
+    return false
+end
+
 local function ability_is_valid(hero, ability)
     if not ability then
         return false
@@ -771,6 +795,9 @@ local function can_cast_now(def, hero, ability, detection_enemies)
         return false
     end
     if def.active_modifier and NPC.HasModifier(hero, def.active_modifier) then
+        return false
+    end
+    if has_blocked_modifier(def, hero) then
         return false
     end
     if def.enemy_toggle then
@@ -1082,6 +1109,12 @@ local function process_pending_eul_blink(hero, detection_enemies)
     end
     if not ability_is_valid(hero, entry.ability) then
         pending_eul_blink = nil
+        return
+    end
+    if has_blocked_modifier(blink_def, hero) then
+        if entry.expire_time and GameRules.GetGameTime() > entry.expire_time then
+            pending_eul_blink = nil
+        end
         return
     end
     if not can_cast_now(blink_def, hero, entry.ability, detection_enemies) then
