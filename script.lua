@@ -289,6 +289,8 @@ local ITEM_DEFINITIONS = {
         type = "escape_position",
         range = 1200,
         escape_distance = 1150,
+        requires_enemy = true,
+        enemy_toggle = true,
     },
     overwhelming_blink = {
         item_name = "item_overwhelming_blink",
@@ -297,6 +299,8 @@ local ITEM_DEFINITIONS = {
         type = "escape_position",
         range = 1200,
         escape_distance = 1150,
+        requires_enemy = true,
+        enemy_toggle = true,
     },
     swift_blink = {
         item_name = "item_swift_blink",
@@ -305,6 +309,8 @@ local ITEM_DEFINITIONS = {
         type = "escape_position",
         range = 1200,
         escape_distance = 1150,
+        requires_enemy = true,
+        enemy_toggle = true,
     },
     arcane_blink = {
         item_name = "item_arcane_blink",
@@ -313,6 +319,8 @@ local ITEM_DEFINITIONS = {
         type = "escape_position",
         range = 1200,
         escape_distance = 1150,
+        requires_enemy = true,
+        enemy_toggle = true,
     },
     solar_crest = {
         item_name = "item_solar_crest",
@@ -452,10 +460,50 @@ local function mark_cast(item_id, game_time)
     last_cast_times[item_id] = game_time
 end
 
-local function should_require_enemy(item_key, definition)
-    local toggle = enemy_requirement_toggles[item_key]
-    if toggle and toggle.Get then
+local function get_switch_state(toggle)
+    if not toggle then
+        return nil
+    end
+
+    if toggle.Get then
         return toggle:Get()
+    end
+
+    if toggle.GetState then
+        return toggle:GetState()
+    end
+
+    if toggle.IsEnabled then
+        return toggle:IsEnabled()
+    end
+
+    if toggle.GetValue then
+        return toggle:GetValue()
+    end
+
+    if toggle.IsOn then
+        return toggle:IsOn()
+    end
+
+    if toggle.state ~= nil then
+        return toggle.state
+    end
+
+    if toggle.enabled ~= nil then
+        return toggle.enabled
+    end
+
+    if toggle.value ~= nil then
+        return toggle.value
+    end
+
+    return nil
+end
+
+local function should_require_enemy(item_key, definition)
+    local toggle_state = get_switch_state(enemy_requirement_toggles[item_key])
+    if toggle_state ~= nil then
+        return toggle_state
     end
 
     if definition and definition.requires_enemy ~= nil then
