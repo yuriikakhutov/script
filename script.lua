@@ -13,6 +13,7 @@ local ui = {
     enable = activation_group:Switch("Enable", true),
 }
 
+ui.escape_turn_delay = activation_group:Slider("Force/Hurricane turn delay (ms)", 0, 500, 200, "%dms")
 ui.enemy_range = enemy_group:Slider("Enemy detection range", 200, 2000, 900, "%d")
 
 local ITEM_DEFINITIONS = {
@@ -130,7 +131,7 @@ local ITEM_DEFINITIONS = {
         ability_names = { "item_force_staff" },
         display_name = "Force Staff",
         icon = "panorama/images/items/force_staff_png.vtex_c",
-        cast = "target_self",
+        cast = "force_escape",
         threshold_default = 45,
         enemy_toggle = true,
         enemy_required_default = true,
@@ -140,7 +141,7 @@ local ITEM_DEFINITIONS = {
         ability_names = { "item_hurricane_pike" },
         display_name = "Hurricane Pike",
         icon = "panorama/images/items/hurricane_pike_png.vtex_c",
-        cast = "target_self",
+        cast = "force_escape",
         threshold_default = 45,
         enemy_toggle = true,
         enemy_required_default = true,
@@ -394,6 +395,7 @@ local FOUNTAIN_POS = {
 }
 
 local recent_casts = {}
+local pending_escape_casts = {}
 
 local function find_item(hero, def)
     if not def.ability_names then
@@ -518,39 +520,117 @@ local function compute_escape_position(hero, def, hero_pos, nearest_enemy, team)
     return hero_pos + direction:Scaled(distance)
 end
 
+local function get_escape_turn_delay()
+    if ui.escape_turn_delay and ui.escape_turn_delay.Get then
+        local value = ui.escape_turn_delay:Get() or 0
+        if value < 0 then
+            value = 0
+        end
+        return value / 1000
+    end
+
+    return 0.2
+end
+
+local function orient_for_escape(hero, position)
+    if not position then
+        return
+    end
+
+    if NPC and NPC.FaceTowards then
+        NPC.FaceTowards(hero, position)
+    end
+
+    if Player and Player.PrepareUnitOrders and Players and Players.GetLocal and Enum and Enum.UnitOrder and Enum.PlayerOrderIssuer then
+        local player = Players.GetLocal()
+        if player then
+            Player.PrepareUnitOrders(
+                player,
+                Enum.UnitOrder.DOTA_UNIT_ORDER_MOVE_TO_POSITION,
+                nil,
+                position,
+                nil,
+                Enum.PlayerOrderIssuer.DOTA_ORDER_ISSUER_CURRENT_UNIT_ONLY,
+                hero,
+                false,
+                true
+            )
+        end
+    elseif NPC and NPC.MoveTo then
+        NPC.MoveTo(hero, position)
+    end
+end
+
+local function queue_force_escape(hero, ability, def, hero_pos, nearest_enemy, team, now)
+    if pending_escape_casts[def.id] then
+        return false
+    end
+
+    local escape_pos = compute_escape_position(hero, def, hero_pos, nearest_enemy, team)
+    if not escape_pos then
+        return false
+    end
+
+    orient_for_escape(hero, escape_pos)
+
+    pending_escape_casts[def.id] = {
+        execute_at = now + get_escape_turn_delay(),
+        position = escape_pos,
+    }
+
+    return true
+end
+
 local function try_cast(hero, ability, def, hero_pos, enemies, nearest_enemy, team)
     local ability_index = Ability.GetIndex(ability)
     local now = GameRules.GetGameTime()
-    local last = recent_casts[ability_index]
+    local last = ability_index and recent_casts[ability_index] or nil
 
     if last and now - last < CAST_RETRY_DELAY then
         return false
     end
 
-    recent_casts[ability_index] = now
-
-    if def.cast == "no_target" then
+    if def.cast == "force_escape" then
+        if queue_force_escape(hero, ability, def, hero_pos, nearest_enemy, team, now) then
+            return true
+        end
+    elseif def.cast == "no_target" then
         Ability.CastNoTarget(ability)
+        if ability_index then
+            recent_casts[ability_index] = now
+        end
         return true
     elseif def.cast == "target_self" then
         Ability.CastTarget(ability, hero)
+        if ability_index then
+            recent_casts[ability_index] = now
+        end
         return true
     elseif def.cast == "target_enemy" then
         local target = select_enemy_target(hero, ability, def, enemies)
         if target then
             Ability.CastTarget(ability, target)
+            if ability_index then
+                recent_casts[ability_index] = now
+            end
             return true
         end
     elseif def.cast == "enemy_position" then
         local target = select_enemy_target(hero, ability, def, enemies)
         if target then
             Ability.CastPosition(ability, Entity.GetAbsOrigin(target))
+            if ability_index then
+                recent_casts[ability_index] = now
+            end
             return true
         end
     elseif def.cast == "blink_escape" then
         local pos = compute_escape_position(hero, def, hero_pos, nearest_enemy, team)
         if pos then
             Ability.CastPosition(ability, pos)
+            if ability_index then
+                recent_casts[ability_index] = now
+            end
             return true
         end
     end
@@ -558,15 +638,89 @@ local function try_cast(hero, ability, def, hero_pos, enemies, nearest_enemy, te
     return false
 end
 
+local function clear_pending_escape()
+    if next(pending_escape_casts) then
+        for key in pairs(pending_escape_casts) do
+            pending_escape_casts[key] = nil
+        end
+    end
+end
+
+local function process_pending_escape(hero, now)
+    if not next(pending_escape_casts) then
+        return
+    end
+
+    for item_id, pending in pairs(pending_escape_casts) do
+        repeat
+            if not pending then
+                pending_escape_casts[item_id] = nil
+                break
+            end
+
+            local def = ITEM_BY_ID[item_id]
+            if not def then
+                pending_escape_casts[item_id] = nil
+                break
+            end
+
+            if now < (pending.execute_at or 0) then
+                if pending.position then
+                    orient_for_escape(hero, pending.position)
+                end
+                break
+            end
+
+            if NPC.IsChannellingAbility(hero) and not def.allow_while_channeling then
+                pending_escape_casts[item_id] = nil
+                break
+            end
+
+            local ability = find_item(hero, def)
+            if not ability then
+                pending_escape_casts[item_id] = nil
+                break
+            end
+
+            if item_on_cooldown(hero, ability) then
+                pending_escape_casts[item_id] = nil
+                break
+            end
+
+            if pending.position then
+                orient_for_escape(hero, pending.position)
+            end
+
+            Ability.CastTarget(ability, hero)
+
+            local index = Ability.GetIndex(ability)
+            if index then
+                recent_casts[index] = now
+            end
+
+            pending_escape_casts[item_id] = nil
+        until true
+    end
+end
+
 function auto_defender.OnUpdate()
     if not ui.enable:Get() then
+        if next(pending_escape_casts) then
+            clear_pending_escape()
+        end
         return
     end
 
     local hero = Heroes.GetLocal()
     if not hero or not Entity.IsAlive(hero) or Entity.IsDormant(hero) or NPC.IsIllusion(hero) then
+        if next(pending_escape_casts) then
+            clear_pending_escape()
+        end
         return
     end
+
+    local now = GameRules.GetGameTime()
+    process_pending_escape(hero, now)
 
     local health = Entity.GetHealth(hero)
     local max_health = math.max(Entity.GetMaxHealth(hero), 1)
@@ -649,6 +803,7 @@ end
 
 function auto_defender.OnGameStart()
     recent_casts = {}
+    pending_escape_casts = {}
 end
 
 auto_defender.OnGameEnd = auto_defender.OnGameStart
