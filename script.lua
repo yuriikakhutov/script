@@ -29,6 +29,17 @@ local ITEM_DEFINITIONS = {
         modifier = "modifier_item_glimmer_cape_fade",
     },
     {
+        id = "meteor",
+        ability_names = { "item_meteor_hammer" },
+        display_name = "Meteor Hammer",
+        icon = "panorama/images/items/meteor_hammer_png.vtex_c",
+        cast = "meteor_combo",
+        threshold_default = 35,
+        enemy_toggle = true,
+        enemy_required_default = true,
+        cast_range_override = 600,
+    },
+    {
         id = "ghost",
         ability_names = { "item_ghost" },
         display_name = "Ghost Scepter",
@@ -720,6 +731,47 @@ local function try_cast(hero, ability, def, hero_pos, enemies, nearest_enemy, te
     elseif def.cast == "enemy_position" then
         local target = select_enemy_target(hero, ability, def, enemies)
         if target then
+            Ability.CastPosition(ability, Entity.GetAbsOrigin(target))
+            if ability_index then
+                recent_casts[ability_index] = now
+            end
+            return true
+        end
+    elseif def.cast == "meteor_combo" then
+        local target = select_enemy_target(hero, ability, def, enemies)
+        if target then
+            local glimmer_def = ITEM_BY_ID["glimmer"]
+            if glimmer_def and ui.priority and ui.priority.Get and ui.priority:Get(glimmer_def.id) then
+                local glimmer_toggle = ui.enemy_toggles and ui.enemy_toggles[glimmer_def.id]
+                local requires_enemy = false
+                if glimmer_def.enemy_toggle then
+                    requires_enemy = glimmer_toggle and glimmer_toggle:Get()
+                elseif glimmer_def.requires_enemy then
+                    requires_enemy = true
+                end
+
+                if not requires_enemy or nearest_enemy then
+                    local glimmer_item = find_item(hero, glimmer_def)
+                    if glimmer_item and not item_on_cooldown(hero, glimmer_item) then
+                        if not glimmer_def.modifier or not NPC.HasModifier(hero, glimmer_def.modifier) then
+                            local threshold_slider = ui.thresholds and ui.thresholds[glimmer_def.id]
+                            local threshold = threshold_slider and threshold_slider:Get() or 0
+                            if threshold > 0 then
+                                local health_pct = (Entity.GetHealth(hero) / math.max(Entity.GetMaxHealth(hero), 1)) * 100
+                                if health_pct <= threshold then
+                                    Ability.CastTarget(glimmer_item, hero)
+
+                                    local glimmer_index = Ability.GetIndex(glimmer_item)
+                                    if glimmer_index then
+                                        recent_casts[glimmer_index] = now
+                                    end
+                                end
+                            end
+                        end
+                    end
+                end
+            end
+
             Ability.CastPosition(ability, Entity.GetAbsOrigin(target))
             if ability_index then
                 recent_casts[ability_index] = now
