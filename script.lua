@@ -598,6 +598,8 @@ local function ability_is_valid(hero, ability)
     return true
 end
 
+local is_channeling_ability = NPC.IsChannelingAbility or NPC.IsChannellingAbility
+
 local function item_has_charges(ability)
     if not ability then
         return false
@@ -869,7 +871,7 @@ local function process_pending_escapes(hero, detection_enemies)
             pending_escapes[def_id] = nil
         else
             if current_time >= entry.execute_time then
-                if NPC.IsChannellingAbility(hero) then
+                if is_channeling_ability and is_channeling_ability(hero) then
                     entry.execute_time = current_time + 0.05
                 else
                     if ability_is_valid(hero, entry.ability) then
@@ -908,7 +910,7 @@ local function process_pending_eul_blink(hero, detection_enemies)
         end
         return
     end
-    if NPC.IsChannellingAbility(hero) then
+    if is_channeling_ability and is_channeling_ability(hero) then
         return
     end
     if not entry.ability or Ability.GetOwner(entry.ability) ~= hero then
@@ -1068,7 +1070,7 @@ function auto_defender.OnUpdate()
     process_pending_escapes(hero, detection_enemies)
     process_pending_eul_blink(hero, detection_enemies)
 
-    if NPC.IsChannellingAbility(hero) then
+    if is_channeling_ability and is_channeling_ability(hero) then
         -- allow only items that explicitly opt-in
         local queue = build_priority_queue()
         for _, item in ipairs(queue) do
