@@ -701,12 +701,37 @@ local function build_priority_queue()
         end
     end
     table.sort(queue, function(a, b)
+        if a.def.cast == "eul_combo" and b.def.cast == "blink_escape" then
+            return true
+        end
+        if a.def.cast == "blink_escape" and b.def.cast == "eul_combo" then
+            return false
+        end
         if a.order == b.order then
             return a.def.id < b.def.id
         end
         return a.order < b.order
     end)
     return queue
+end
+
+local function has_ready_eul_combo(hero, detection_enemies, current_health)
+    current_health = current_health or health_percent(hero)
+    for _, def in ipairs(ITEM_DEFINITIONS) do
+        if def.cast == "eul_combo" then
+            local widgets = ui.items[def.id]
+            if widgets and widgets.enabled:Get() then
+                local threshold = widgets.threshold and widgets.threshold:Get()
+                if not threshold or current_health <= threshold then
+                    local ability = find_item(hero, def.ability_names)
+                    if ability and ability_is_valid(hero, ability) and can_cast_now(def, hero, ability, detection_enemies) then
+                        return true
+                    end
+                end
+            end
+        end
+    end
+    return false
 end
 --#endregion
 
@@ -984,6 +1009,10 @@ local function cast_item(def, hero, detection_enemies)
         return true
     elseif def.cast == "blink_escape" then
         if pending_eul_blink then
+            return false
+        end
+        local current_health = health_percent(hero)
+        if has_ready_eul_combo(hero, detection_enemies, current_health) then
             return false
         end
         local enemy = find_closest_enemy(hero, ui.enemy_range:Get())
