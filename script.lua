@@ -3,53 +3,25 @@
 local auto_defender = {}
 
 --#region UI setup
+local tab = Menu.Create("General", "Auto Defender", "Auto Defender", "Auto Defender")
 
-local MAIN_FIRST_TAB = "General"
-local MAIN_SECTION = "Auto Defender"
-
-local overview_tab = Menu.Create(MAIN_FIRST_TAB, MAIN_SECTION, "Overview")
-local overview_page = overview_tab:Create("Overview")
-
-local info_group = overview_page:Create("Info")
-local activation_group = overview_page:Create("Activation")
-local detection_group = overview_page:Create("Enemy Detection")
+local info_group = tab:Create("Info")
+local activation_group = tab:Create("Activation", 1)
+local items_group = tab:Create("Items", 2)
+local priority_group = tab:Create("Priority", 3)
+local threshold_group = tab:Create("Health Thresholds", 4)
+local enemy_group = tab:Create("Enemy Checks", 5)
 
 info_group:Label("Author: GhostyPowa")
-
-local function create_section_tab(second_name, third_name)
-    local second_tab = Menu.Create(MAIN_FIRST_TAB, MAIN_SECTION, second_name)
-    local third_tab = second_tab:Create(third_name or second_name)
-    local toggles = third_tab:Create("Toggles")
-    local priority = third_tab:Create("Priority")
-    local thresholds = third_tab:Create("Thresholds")
-    local enemy_checks = third_tab:Create("Enemy Checks")
-    priority:Label("Lower priority value means the item attempts earlier")
-    return {
-        toggles = toggles,
-        priority = priority,
-        thresholds = thresholds,
-        enemy = enemy_checks,
-    }
-end
-
-local SECTION_LAYOUT = {
-    { id = "defensive", second = "Defensive", third = "Defensive Items" },
-    { id = "escape", second = "Escape", third = "Escape Tools" },
-    { id = "utility", second = "Utility", third = "Utility Combos" },
-    { id = "offensive", second = "Offensive", third = "Offensive Items" },
-}
-
-local section_groups = {}
-for _, section in ipairs(SECTION_LAYOUT) do
-    section_groups[section.id] = create_section_tab(section.second, section.third)
-end
 
 local ui = {
     enable = activation_group:Switch("Enable", true),
     escape_turn_delay = activation_group:Slider("Force/Hurricane turn delay (ms)", 0, 500, 200, "%dms"),
-    enemy_range = detection_group:Slider("Enemy detection range", 200, 2000, 900, "%d"),
+    enemy_range = enemy_group:Slider("Enemy detection range", 200, 2000, 900, "%d"),
     items = {},
 }
+
+priority_group:Label("Lower priority value means the item attempts earlier")
 
 --#endregion
 
@@ -65,7 +37,6 @@ local ITEM_DEFINITIONS = {
         enemy_toggle = true,
         enemy_required_default = true,
         modifier = "modifier_item_glimmer_cape_fade",
-        category = "defensive",
     },
     {
         id = "ghost",
@@ -77,7 +48,6 @@ local ITEM_DEFINITIONS = {
         enemy_toggle = true,
         enemy_required_default = true,
         modifier = "modifier_ghost_state",
-        category = "defensive",
     },
     {
         id = "bkb",
@@ -89,7 +59,6 @@ local ITEM_DEFINITIONS = {
         enemy_toggle = true,
         enemy_required_default = true,
         modifier = "modifier_black_king_bar_immune",
-        category = "defensive",
     },
     {
         id = "pipe",
@@ -101,7 +70,6 @@ local ITEM_DEFINITIONS = {
         enemy_toggle = true,
         enemy_required_default = true,
         modifier = "modifier_item_pipe_barrier",
-        category = "defensive",
     },
     {
         id = "crimson",
@@ -113,7 +81,6 @@ local ITEM_DEFINITIONS = {
         enemy_toggle = true,
         enemy_required_default = true,
         modifier = "modifier_item_crimson_guard_nostack",
-        category = "defensive",
     },
     {
         id = "blade_mail",
@@ -125,7 +92,6 @@ local ITEM_DEFINITIONS = {
         enemy_toggle = true,
         enemy_required_default = true,
         modifier = "modifier_item_blade_mail_reflect",
-        category = "defensive",
     },
     {
         id = "lotus",
@@ -137,7 +103,6 @@ local ITEM_DEFINITIONS = {
         enemy_toggle = true,
         enemy_required_default = true,
         modifier = "modifier_item_lotus_orb_active",
-        category = "defensive",
     },
     {
         id = "solar_crest",
@@ -149,7 +114,6 @@ local ITEM_DEFINITIONS = {
         enemy_toggle = true,
         enemy_required_default = true,
         modifier = "modifier_item_solar_crest_armor",
-        category = "defensive",
     },
     {
         id = "drum",
@@ -161,7 +125,6 @@ local ITEM_DEFINITIONS = {
         enemy_toggle = true,
         enemy_required_default = true,
         requires_charges = true,
-        category = "defensive",
     },
     {
         id = "bearing",
@@ -173,7 +136,6 @@ local ITEM_DEFINITIONS = {
         enemy_toggle = true,
         enemy_required_default = true,
         requires_charges = true,
-        category = "defensive",
     },
     {
         id = "force",
@@ -186,7 +148,6 @@ local ITEM_DEFINITIONS = {
         enemy_required_default = true,
         escape_distance = 600,
         active_modifier = "modifier_item_force_staff_active",
-        category = "escape",
     },
     {
         id = "hurricane",
@@ -199,7 +160,6 @@ local ITEM_DEFINITIONS = {
         enemy_required_default = true,
         escape_distance = 600,
         active_modifier = "modifier_item_hurricane_pike",
-        category = "escape",
     },
     {
         id = "blink",
@@ -211,7 +171,6 @@ local ITEM_DEFINITIONS = {
         enemy_toggle = true,
         enemy_required_default = true,
         blink_range = 1200,
-        category = "escape",
     },
     {
         id = "swift_blink",
@@ -223,7 +182,6 @@ local ITEM_DEFINITIONS = {
         enemy_toggle = true,
         enemy_required_default = true,
         blink_range = 1200,
-        category = "escape",
     },
     {
         id = "arcane_blink",
@@ -235,7 +193,6 @@ local ITEM_DEFINITIONS = {
         enemy_toggle = true,
         enemy_required_default = true,
         blink_range = 1200,
-        category = "escape",
     },
     {
         id = "overwhelming_blink",
@@ -247,7 +204,6 @@ local ITEM_DEFINITIONS = {
         enemy_toggle = true,
         enemy_required_default = true,
         blink_range = 1200,
-        category = "escape",
     },
     {
         id = "meteor",
@@ -259,7 +215,6 @@ local ITEM_DEFINITIONS = {
         enemy_toggle = true,
         enemy_required_default = true,
         cast_range_override = 600,
-        category = "utility",
     },
     {
         id = "blood_grenade",
@@ -272,7 +227,6 @@ local ITEM_DEFINITIONS = {
         enemy_required_default = true,
         requires_charges = true,
         cast_range_override = 900,
-        category = "offensive",
     },
     {
         id = "urn",
@@ -284,7 +238,6 @@ local ITEM_DEFINITIONS = {
         enemy_toggle = true,
         enemy_required_default = true,
         requires_charges = true,
-        category = "defensive",
     },
     {
         id = "vessel",
@@ -296,7 +249,6 @@ local ITEM_DEFINITIONS = {
         enemy_toggle = true,
         enemy_required_default = true,
         requires_charges = true,
-        category = "defensive",
     },
     {
         id = "disperser",
@@ -308,7 +260,6 @@ local ITEM_DEFINITIONS = {
         enemy_toggle = true,
         enemy_required_default = true,
         modifier = "modifier_item_disperser_speed",
-        category = "defensive",
     },
     {
         id = "eul",
@@ -320,7 +271,6 @@ local ITEM_DEFINITIONS = {
         enemy_toggle = true,
         enemy_required_default = true,
         modifier = "modifier_eul_cyclone",
-        category = "utility",
     },
     {
         id = "ethereal",
@@ -332,7 +282,6 @@ local ITEM_DEFINITIONS = {
         enemy_toggle = true,
         enemy_required_default = true,
         modifier = "modifier_item_ethereal_blade_ethereal",
-        category = "defensive",
     },
     {
         id = "halberd",
@@ -344,7 +293,6 @@ local ITEM_DEFINITIONS = {
         enemy_toggle = true,
         enemy_required_default = true,
         cast_range_override = 600,
-        category = "offensive",
     },
     {
         id = "atos",
@@ -356,7 +304,6 @@ local ITEM_DEFINITIONS = {
         enemy_toggle = true,
         enemy_required_default = true,
         cast_range_override = 1100,
-        category = "offensive",
     },
     {
         id = "gleipnir",
@@ -368,7 +315,6 @@ local ITEM_DEFINITIONS = {
         enemy_toggle = true,
         enemy_required_default = true,
         cast_range_override = 1100,
-        category = "offensive",
     },
     {
         id = "diffusal",
@@ -380,7 +326,6 @@ local ITEM_DEFINITIONS = {
         enemy_toggle = true,
         enemy_required_default = true,
         cast_range_override = 600,
-        category = "offensive",
     },
     {
         id = "nullifier",
@@ -392,7 +337,6 @@ local ITEM_DEFINITIONS = {
         enemy_toggle = true,
         enemy_required_default = true,
         cast_range_override = 900,
-        category = "offensive",
     },
     {
         id = "orchid",
@@ -404,7 +348,6 @@ local ITEM_DEFINITIONS = {
         enemy_toggle = true,
         enemy_required_default = true,
         cast_range_override = 900,
-        category = "offensive",
     },
     {
         id = "bloodthorn",
@@ -416,7 +359,6 @@ local ITEM_DEFINITIONS = {
         enemy_toggle = true,
         enemy_required_default = true,
         cast_range_override = 900,
-        category = "offensive",
     },
     {
         id = "hex",
@@ -428,7 +370,6 @@ local ITEM_DEFINITIONS = {
         enemy_toggle = true,
         enemy_required_default = true,
         cast_range_override = 800,
-        category = "offensive",
     },
     {
         id = "abyssal",
@@ -440,7 +381,6 @@ local ITEM_DEFINITIONS = {
         enemy_toggle = true,
         enemy_required_default = true,
         cast_range_override = 600,
-        category = "offensive",
     },
     {
         id = "dagon",
@@ -458,19 +398,17 @@ local ITEM_DEFINITIONS = {
         enemy_toggle = true,
         enemy_required_default = true,
         cast_range_override = 800,
-        category = "offensive",
     },
     {
         id = "wind_waker",
         display_name = "Wind Waker",
         icon = "panorama/images/items/wind_waker_png.vtex_c",
         ability_names = { "item_wind_waker" },
-        cast = "eul_combo",
+        cast = "target_self",
         threshold_default = 35,
         enemy_toggle = true,
         enemy_required_default = true,
         modifier = "modifier_item_wind_waker",
-        category = "utility",
     },
     {
         id = "silver_edge",
@@ -482,7 +420,6 @@ local ITEM_DEFINITIONS = {
         enemy_toggle = true,
         enemy_required_default = true,
         cast_range_override = 600,
-        category = "offensive",
     },
     {
         id = "shadow_blade",
@@ -494,7 +431,6 @@ local ITEM_DEFINITIONS = {
         enemy_toggle = true,
         enemy_required_default = true,
         modifier = "modifier_invisible",
-        category = "offensive",
     },
 }
 
@@ -502,36 +438,16 @@ local ITEM_BY_ID = {}
 local BLINK_ITEM_IDS = { "blink", "swift_blink", "arcane_blink", "overwhelming_blink" }
 --#endregion
 
-local function apply_icon(widget, icon)
-    if not widget or not icon then
-        return
-    end
-    if widget.SetImage then
-        widget:SetImage(icon)
-    elseif widget.SetIcon then
-        widget:SetIcon(icon)
-    elseif widget.Image then
-        widget:Image(icon)
-    elseif widget.Icon then
-        widget:Icon(icon)
-    end
-end
-
 for index, def in ipairs(ITEM_DEFINITIONS) do
     ITEM_BY_ID[def.id] = def
-    local section = section_groups[def.category or "defensive"] or section_groups.defensive
     local entry = {}
-    entry.enabled = section.toggles:Switch(def.display_name, true)
-    apply_icon(entry.enabled, def.icon)
-    entry.priority = section.priority:Slider(def.display_name .. " priority", 1, #ITEM_DEFINITIONS, index, "%d")
-    apply_icon(entry.priority, def.icon)
+    entry.enabled = items_group:Switch(def.display_name, true)
+    entry.priority = priority_group:Slider(def.display_name .. " priority", 1, #ITEM_DEFINITIONS, index, "%d")
     if not def.no_threshold then
-        entry.threshold = section.thresholds:Slider(def.display_name .. " threshold", 1, 100, def.threshold_default or 50, "%d%%")
-        apply_icon(entry.threshold, def.icon)
+        entry.threshold = threshold_group:Slider(def.display_name .. " threshold", 1, 100, def.threshold_default or 50, "%d%%")
     end
     if def.enemy_toggle then
-        entry.requires_enemy = section.enemy:Switch(def.display_name .. " requires enemy", def.enemy_required_default or false)
-        apply_icon(entry.requires_enemy, def.icon)
+        entry.requires_enemy = enemy_group:Switch(def.display_name .. " requires enemy", def.enemy_required_default or false)
     end
     ui.items[def.id] = entry
 end
@@ -711,12 +627,6 @@ local function build_priority_queue()
         end
     end
     table.sort(queue, function(a, b)
-        if a.def.cast == "eul_combo" and b.def.cast == "blink_escape" then
-            return true
-        end
-        if a.def.cast == "blink_escape" and b.def.cast == "eul_combo" then
-            return false
-        end
         if a.order == b.order then
             return a.def.id < b.def.id
         end
@@ -724,27 +634,7 @@ local function build_priority_queue()
     end)
     return queue
 end
-
-local function has_ready_eul_combo(hero, detection_enemies, current_health)
-    current_health = current_health or health_percent(hero)
-    for _, def in ipairs(ITEM_DEFINITIONS) do
-        if def.cast == "eul_combo" then
-            local widgets = ui.items[def.id]
-            if widgets and widgets.enabled:Get() then
-                local threshold = widgets.threshold and widgets.threshold:Get()
-                if not threshold or current_health <= threshold then
-                    local ability = find_item(hero, def.ability_names)
-                    if ability and ability_is_valid(hero, ability) and can_cast_now(def, hero, ability, detection_enemies) then
-                        return true
-                    end
-                end
-            end
-        end
-    end
-    return false
-end
 --#endregion
-
 --#region Pending escape handling
 local pending_escapes = {}
 local pending_eul_blink = nil
@@ -787,18 +677,18 @@ local function queue_blink_after_eul(eul_def, hero, detection_enemies)
     if not blink_def or not blink_ability then
         return false
     end
-    local blink_distance = blink_def.blink_range or 1200
-    local enemy = find_closest_enemy(hero, math.max(ui.enemy_range:Get() or 0, blink_distance))
+    local enemy = find_closest_enemy(hero, ui.enemy_range:Get())
     if not enemy then
         return false
     end
-    local escape_position = compute_escape_position(hero, enemy, blink_distance)
+    local distance = blink_def.blink_range or 1200
+    local escape_position = compute_escape_position(hero, enemy, distance)
     pending_eul_blink = {
         def = blink_def,
         ability = blink_ability,
         enemy = enemy,
         escape_position = escape_position,
-        distance = blink_distance,
+        distance = distance,
         wait_modifier = eul_def and eul_def.modifier or "modifier_eul_cyclone",
         expire_time = GameRules.GetGameTime() + 3.5,
     }
@@ -925,7 +815,7 @@ local function process_pending_eul_blink(hero, detection_enemies)
     end
     local enemy = entry.enemy
     if not enemy or not Entity.IsAlive(enemy) or Entity.IsDormant(enemy) or NPC.IsIllusion(enemy) then
-        enemy = find_closest_enemy(hero, math.max(ui.enemy_range:Get() or 0, entry.distance or blink_def.blink_range or 1200))
+        enemy = find_closest_enemy(hero, ui.enemy_range:Get())
     end
     local cast_position = entry.escape_position
     if enemy then
@@ -939,7 +829,6 @@ local function process_pending_eul_blink(hero, detection_enemies)
     pending_eul_blink = nil
 end
 --#endregion
-
 --#region Casting logic
 local function cast_eul_combo(def, hero, ability, detection_enemies)
     Ability.CastTarget(ability, hero)
@@ -1021,12 +910,7 @@ local function cast_item(def, hero, detection_enemies)
         if pending_eul_blink then
             return false
         end
-        local current_health = health_percent(hero)
-        if has_ready_eul_combo(hero, detection_enemies, current_health) then
-            return false
-        end
-        local search_radius = math.max(ui.enemy_range:Get() or 0, def.blink_range or 1200)
-        local enemy = find_closest_enemy(hero, search_radius)
+        local enemy = find_closest_enemy(hero, ui.enemy_range:Get())
         if not enemy then
             return false
         end
@@ -1035,8 +919,7 @@ local function cast_item(def, hero, detection_enemies)
         Ability.CastPosition(ability, escape_position)
         return true
     elseif def.cast == "force_escape" then
-        local search_radius = math.max(ui.enemy_range:Get() or 0, def.escape_distance or 600)
-        local enemy = find_closest_enemy(hero, search_radius)
+        local enemy = find_closest_enemy(hero, ui.enemy_range:Get())
         if not enemy then
             return false
         end
@@ -1110,4 +993,3 @@ function auto_defender.OnGameEnd()
 end
 
 return auto_defender
-
