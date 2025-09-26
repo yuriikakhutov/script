@@ -16,32 +16,38 @@ local detection_group = overview_page:Create("Enemy Detection")
 
 info_group:Label("Author: GhostyPowa")
 
-local function create_section_tab(second_name, third_name)
+local function create_section_tab(second_name, third_name, opts)
+    opts = opts or {}
     local second_tab = Menu.Create(MAIN_FIRST_TAB, MAIN_SECTION, second_name)
     local third_tab = second_tab:Create(third_name or second_name)
     local toggles = third_tab:Create("Toggles")
     local priority = third_tab:Create("Priority")
     local thresholds = third_tab:Create("Thresholds")
     local enemy_checks = third_tab:Create("Enemy Checks")
+    local dependencies
+    if opts.dependencies then
+        dependencies = third_tab:Create("Dependencies")
+    end
     priority:Label("Lower priority value means the item attempts earlier")
     return {
         toggles = toggles,
         priority = priority,
         thresholds = thresholds,
         enemy = enemy_checks,
+        dependencies = dependencies,
     }
 end
 
 local SECTION_LAYOUT = {
     { id = "defensive", second = "Defensive", third = "Defensive Items" },
     { id = "escape", second = "Escape", third = "Escape Tools" },
-    { id = "utility", second = "Utility", third = "Utility Combos" },
+    { id = "utility", second = "Utility", third = "Utility Combos", dependencies = true },
     { id = "offensive", second = "Offensive", third = "Offensive Items" },
 }
 
 local section_groups = {}
 for _, section in ipairs(SECTION_LAYOUT) do
-    section_groups[section.id] = create_section_tab(section.second, section.third)
+    section_groups[section.id] = create_section_tab(section.second, section.third, section)
 end
 
 local ui = {
@@ -49,6 +55,7 @@ local ui = {
     escape_turn_delay = activation_group:Slider("Force/Hurricane turn delay (ms)", 0, 500, 200, "%dms"),
     enemy_range = detection_group:Slider("Enemy detection range", 200, 2000, 900, "%d"),
     items = {},
+    dependencies = {},
 }
 
 --#endregion
@@ -517,6 +524,29 @@ local function apply_icon(widget, icon)
     end
 end
 
+local function get_item_icon(item_id)
+    for _, definition in ipairs(ITEM_DEFINITIONS) do
+        if definition.id == item_id then
+            return definition.icon
+        end
+    end
+    return nil
+end
+
+if section_groups.utility and section_groups.utility.dependencies then
+    ui.dependencies.meteor_requires_glimmer = section_groups.utility.dependencies:Switch(
+        "Require Glimmer Cape before Meteor Hammer",
+        true
+    )
+    apply_icon(ui.dependencies.meteor_requires_glimmer, get_item_icon("meteor"))
+
+    ui.dependencies.cyclone_requires_blink = section_groups.utility.dependencies:Switch(
+        "Require Blink Dagger for cyclone combos",
+        true
+    )
+    apply_icon(ui.dependencies.cyclone_requires_blink, get_item_icon("eul") or get_item_icon("wind_waker"))
+end
+
 for index, def in ipairs(ITEM_DEFINITIONS) do
     ITEM_BY_ID[def.id] = def
     local section = section_groups[def.category or "defensive"] or section_groups.defensive
@@ -729,6 +759,10 @@ end
 
 local function has_ready_eul_combo(hero, detection_enemies, current_health)
     current_health = current_health or health_percent(hero)
+    local require_blink = true
+    if ui.dependencies and ui.dependencies.cyclone_requires_blink then
+        require_blink = ui.dependencies.cyclone_requires_blink:Get()
+    end
     for _, def in ipairs(ITEM_DEFINITIONS) do
         if def.cast == "eul_combo" then
             local widgets = ui.items[def.id]
@@ -737,7 +771,14 @@ local function has_ready_eul_combo(hero, detection_enemies, current_health)
                 if not threshold or current_health <= threshold then
                     local ability = find_item(hero, def.ability_names)
                     if ability and ability_is_valid(hero, ability) and can_cast_now(def, hero, ability, detection_enemies) then
-                        return true
+                        if require_blink then
+                            local blink_def, blink_ability = find_ready_blink(hero, detection_enemies)
+                            if blink_def and blink_ability then
+                                return true
+                            end
+                        else
+                            return true
+                        end
                     end
                 end
             end
@@ -784,8 +825,10 @@ local function find_ready_blink(hero, detection_enemies)
     return nil, nil
 end
 
-local function queue_blink_after_eul(eul_def, hero, detection_enemies)
-    local blink_def, blink_ability = find_ready_blink(hero, detection_enemies)
+local function queue_blink_after_eul(eul_def, hero, detection_enemies, blink_def, blink_ability)
+    if not blink_def or not blink_ability then
+        blink_def, blink_ability = find_ready_blink(hero, detection_enemies)
+    end
     if not blink_def or not blink_ability then
         return false
     end
@@ -944,36 +987,56 @@ end
 
 --#region Casting logic
 local function cast_eul_combo(def, hero, ability, detection_enemies)
+    local require_blink = true
+    if ui.dependencies and ui.dependencies.cyclone_requires_blink then
+        require_blink = ui.dependencies.cyclone_requires_blink:Get()
+    end
+
+    local blink_def, blink_ability
+    if require_blink then
+        blink_def, blink_ability = find_ready_blink(hero, detection_enemies)
+        if not blink_def or not blink_ability then
+            return false
+        end
+    end
+
     Ability.CastTarget(ability, hero)
-    queue_blink_after_eul(def, hero, detection_enemies)
+    queue_blink_after_eul(def, hero, detection_enemies, blink_def, blink_ability)
     return true
 end
 
 local function cast_meteor_combo(def, hero, ability, detection_enemies)
+    local require_glimmer = true
+    if ui.dependencies and ui.dependencies.meteor_requires_glimmer then
+        require_glimmer = ui.dependencies.meteor_requires_glimmer:Get()
+    end
+
     local glimmer_def = ITEM_BY_ID.glimmer
-    if not glimmer_def then
-        return false
-    end
-    local glimmer_widgets = ui.items[glimmer_def.id]
-    if not glimmer_widgets or not glimmer_widgets.enabled:Get() then
-        return false
-    end
-
-    local glimmer_threshold = glimmer_widgets.threshold and glimmer_widgets.threshold:Get() or glimmer_def.threshold_default or 50
-    if health_percent(hero) > glimmer_threshold then
-        return false
-    end
-
+    local glimmer_widgets = glimmer_def and ui.items[glimmer_def.id] or nil
     local casted_glimmer = false
-    local glimmer = find_item(hero, glimmer_def.ability_names)
-    if glimmer and ability_is_valid(hero, glimmer) and can_cast_now(glimmer_def, hero, glimmer, detection_enemies) then
-        Ability.CastTarget(glimmer, hero)
-        casted_glimmer = true
+
+    if glimmer_def and glimmer_widgets and glimmer_widgets.enabled:Get() then
+        local glimmer_threshold = glimmer_widgets.threshold and glimmer_widgets.threshold:Get()
+            or glimmer_def.threshold_default
+            or 50
+        if health_percent(hero) <= glimmer_threshold then
+            local glimmer = find_item(hero, glimmer_def.ability_names)
+            if glimmer and ability_is_valid(hero, glimmer) and can_cast_now(glimmer_def, hero, glimmer, detection_enemies) then
+                Ability.CastTarget(glimmer, hero)
+                casted_glimmer = true
+            end
+        end
     end
 
-    if not casted_glimmer then
-        if not (glimmer_def.modifier and NPC.HasModifier(hero, glimmer_def.modifier)) then
+    if require_glimmer then
+        if not glimmer_def then
             return false
+        end
+        if not casted_glimmer then
+            local has_glimmer = glimmer_def.modifier and NPC.HasModifier(hero, glimmer_def.modifier)
+            if not has_glimmer then
+                return false
+            end
         end
     end
 
