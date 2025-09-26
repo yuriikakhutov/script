@@ -211,7 +211,7 @@ local ITEM_DEFINITIONS = {
         icon = "panorama/images/items/meteor_hammer_png.vtex_c",
         ability_names = { "item_meteor_hammer" },
         cast = "meteor_combo",
-        threshold_default = 35,
+        no_threshold = true,
         enemy_toggle = true,
         enemy_required_default = true,
         cast_range_override = 600,
@@ -260,6 +260,17 @@ local ITEM_DEFINITIONS = {
         enemy_toggle = true,
         enemy_required_default = true,
         modifier = "modifier_item_disperser_speed",
+    },
+    {
+        id = "eul",
+        display_name = "Eul's Scepter of Divinity",
+        icon = "panorama/images/items/cyclone_png.vtex_c",
+        ability_names = { "item_cyclone" },
+        cast = "eul_combo",
+        threshold_default = 45,
+        enemy_toggle = true,
+        enemy_required_default = true,
+        modifier = "modifier_eul_cyclone",
     },
     {
         id = "ethereal",
@@ -422,13 +433,19 @@ local ITEM_DEFINITIONS = {
         modifier = "modifier_invisible",
     },
 }
+
+local ITEM_BY_ID = {}
+local BLINK_ITEM_IDS = { "blink", "swift_blink", "arcane_blink", "overwhelming_blink" }
 --#endregion
 
 for index, def in ipairs(ITEM_DEFINITIONS) do
+    ITEM_BY_ID[def.id] = def
     local entry = {}
     entry.enabled = items_group:Switch(def.display_name, true)
     entry.priority = priority_group:Slider(def.display_name .. " priority", 1, #ITEM_DEFINITIONS, index, "%d")
-    entry.threshold = threshold_group:Slider(def.display_name .. " threshold", 1, 100, def.threshold_default or 50, "%d%%")
+    if not def.no_threshold then
+        entry.threshold = threshold_group:Slider(def.display_name .. " threshold", 1, 100, def.threshold_default or 50, "%d%%")
+    end
     if def.enemy_toggle then
         entry.requires_enemy = enemy_group:Switch(def.display_name .. " requires enemy", def.enemy_required_default or false)
     end
@@ -621,15 +638,62 @@ end
 
 --#region Pending escape handling
 local pending_escapes = {}
+local pending_eul_blink = nil
 
 local function clear_pending(def_id)
     if def_id then
         pending_escapes[def_id] = nil
+        if pending_eul_blink and pending_eul_blink.def and pending_eul_blink.def.id == def_id then
+            pending_eul_blink = nil
+        end
         return
     end
     for key in pairs(pending_escapes) do
         pending_escapes[key] = nil
     end
+    pending_eul_blink = nil
+end
+
+local function find_ready_blink(hero, detection_enemies)
+    local current_health = health_percent(hero)
+    for _, id in ipairs(BLINK_ITEM_IDS) do
+        local def = ITEM_BY_ID[id]
+        if def then
+            local widgets = ui.items[def.id]
+            if widgets and widgets.enabled:Get() then
+                local ability = find_item(hero, def.ability_names)
+                if ability and ability_is_valid(hero, ability) and can_cast_now(def, hero, ability, detection_enemies) then
+                    if not widgets.threshold or current_health <= widgets.threshold:Get() then
+                        return def, ability
+                    end
+                end
+            end
+        end
+    end
+    return nil, nil
+end
+
+local function queue_blink_after_eul(eul_def, hero, detection_enemies)
+    local blink_def, blink_ability = find_ready_blink(hero, detection_enemies)
+    if not blink_def or not blink_ability then
+        return false
+    end
+    local enemy = find_closest_enemy(hero, ui.enemy_range:Get())
+    if not enemy then
+        return false
+    end
+    local distance = blink_def.blink_range or 1200
+    local escape_position = compute_escape_position(hero, enemy, distance)
+    pending_eul_blink = {
+        def = blink_def,
+        ability = blink_ability,
+        enemy = enemy,
+        escape_position = escape_position,
+        distance = distance,
+        wait_modifier = eul_def and eul_def.modifier or "modifier_eul_cyclone",
+        expire_time = GameRules.GetGameTime() + 3.5,
+    }
+    return true
 end
 
 local function queue_force_escape(def, hero, ability, closest_enemy)
@@ -669,13 +733,7 @@ end
 
 local function process_pending_escapes(hero, detection_enemies)
     for def_id, entry in pairs(pending_escapes) do
-        local def
-        for _, candidate in ipairs(ITEM_DEFINITIONS) do
-            if candidate.id == def_id then
-                def = candidate
-                break
-            end
-        end
+        local def = ITEM_BY_ID[def_id]
         if not def then
             pending_escapes[def_id] = nil
         else
@@ -697,13 +755,7 @@ local function process_pending_escapes(hero, detection_enemies)
 
     local current_time = GameRules.GetGameTime()
     for def_id, entry in pairs(pending_escapes) do
-        local def
-        for _, candidate in ipairs(ITEM_DEFINITIONS) do
-            if candidate.id == def_id then
-                def = candidate
-                break
-            end
-        end
+        local def = ITEM_BY_ID[def_id]
         if not def then
             pending_escapes[def_id] = nil
         else
@@ -720,30 +772,105 @@ local function process_pending_escapes(hero, detection_enemies)
         end
     end
 end
+
+local function process_pending_eul_blink(hero, detection_enemies)
+    if not pending_eul_blink then
+        return
+    end
+    local entry = pending_eul_blink
+    local blink_def = entry.def
+    if not blink_def then
+        pending_eul_blink = nil
+        return
+    end
+    local widgets = ui.items[blink_def.id]
+    if not widgets or not widgets.enabled:Get() then
+        pending_eul_blink = nil
+        return
+    end
+    local current_health = health_percent(hero)
+    if widgets.threshold and current_health > widgets.threshold:Get() then
+        pending_eul_blink = nil
+        return
+    end
+    if entry.wait_modifier and NPC.HasModifier(hero, entry.wait_modifier) then
+        if entry.expire_time and GameRules.GetGameTime() > entry.expire_time then
+            pending_eul_blink = nil
+        end
+        return
+    end
+    if NPC.IsChannellingAbility(hero) then
+        return
+    end
+    if not entry.ability or Ability.GetOwner(entry.ability) ~= hero then
+        pending_eul_blink = nil
+        return
+    end
+    if not ability_is_valid(hero, entry.ability) then
+        pending_eul_blink = nil
+        return
+    end
+    if not can_cast_now(blink_def, hero, entry.ability, detection_enemies) then
+        pending_eul_blink = nil
+        return
+    end
+    local enemy = entry.enemy
+    if not enemy or not Entity.IsAlive(enemy) or Entity.IsDormant(enemy) or NPC.IsIllusion(enemy) then
+        enemy = find_closest_enemy(hero, ui.enemy_range:Get())
+    end
+    local cast_position = entry.escape_position
+    if enemy then
+        cast_position = compute_escape_position(hero, enemy, entry.distance or blink_def.blink_range or 1200)
+    end
+    if not cast_position then
+        pending_eul_blink = nil
+        return
+    end
+    Ability.CastPosition(entry.ability, cast_position)
+    pending_eul_blink = nil
+end
 --#endregion
 
 --#region Casting logic
-local function cast_meteor_combo(hero, ability, detection_enemies)
-    local glimmer_def = ITEM_DEFINITIONS[1]
+local function cast_eul_combo(def, hero, ability, detection_enemies)
+    Ability.CastTarget(ability, hero)
+    queue_blink_after_eul(def, hero, detection_enemies)
+    return true
+end
+
+local function cast_meteor_combo(def, hero, ability, detection_enemies)
+    local glimmer_def = ITEM_BY_ID.glimmer
+    if not glimmer_def then
+        return false
+    end
     local glimmer_widgets = ui.items[glimmer_def.id]
-    if glimmer_widgets and glimmer_widgets.enabled:Get() then
-        local glimmer = find_item(hero, glimmer_def.ability_names)
-        if glimmer and ability_is_valid(hero, glimmer) and can_cast_now(glimmer_def, hero, glimmer, detection_enemies) then
-            local glimmer_threshold = glimmer_widgets.threshold:Get()
-            if health_percent(hero) <= glimmer_threshold then
-                Ability.CastTarget(glimmer, hero)
-            end
+    if not glimmer_widgets or not glimmer_widgets.enabled:Get() then
+        return false
+    end
+
+    local glimmer_threshold = glimmer_widgets.threshold and glimmer_widgets.threshold:Get() or glimmer_def.threshold_default or 50
+    if health_percent(hero) > glimmer_threshold then
+        return false
+    end
+
+    local casted_glimmer = false
+    local glimmer = find_item(hero, glimmer_def.ability_names)
+    if glimmer and ability_is_valid(hero, glimmer) and can_cast_now(glimmer_def, hero, glimmer, detection_enemies) then
+        Ability.CastTarget(glimmer, hero)
+        casted_glimmer = true
+    end
+
+    if not casted_glimmer then
+        if not (glimmer_def.modifier and NPC.HasModifier(hero, glimmer_def.modifier)) then
+            return false
         end
     end
-    local target = find_enemy_for_ability(hero, ability, { cast_range_override = 600 })
+
+    local target = find_enemy_for_ability(hero, ability, def)
     if not target then
         return false
     end
-    local hero_pos = Entity.GetAbsOrigin(hero)
     local enemy_pos = Entity.GetAbsOrigin(target)
-    if hero_pos:Distance(enemy_pos) > 650 then
-        return false
-    end
     Ability.CastPosition(ability, enemy_pos)
     return true
 end
@@ -782,6 +909,9 @@ local function cast_item(def, hero, detection_enemies)
         Ability.CastPosition(ability, enemy_pos)
         return true
     elseif def.cast == "blink_escape" then
+        if pending_eul_blink then
+            return false
+        end
         local enemy = find_closest_enemy(hero, ui.enemy_range:Get())
         if not enemy then
             return false
@@ -796,8 +926,10 @@ local function cast_item(def, hero, detection_enemies)
             return false
         end
         return queue_force_escape(def, hero, ability, enemy)
+    elseif def.cast == "eul_combo" then
+        return cast_eul_combo(def, hero, ability, detection_enemies)
     elseif def.cast == "meteor_combo" then
-        return cast_meteor_combo(hero, ability, detection_enemies)
+        return cast_meteor_combo(def, hero, ability, detection_enemies)
     end
     return false
 end
@@ -819,6 +951,7 @@ function auto_defender.OnUpdate()
     local detection_enemies = collect_enemies(hero, ui.enemy_range:Get())
 
     process_pending_escapes(hero, detection_enemies)
+    process_pending_eul_blink(hero, detection_enemies)
 
     if NPC.IsChannellingAbility(hero) then
         -- allow only items that explicitly opt-in
@@ -827,8 +960,14 @@ function auto_defender.OnUpdate()
             local def = item.def
             if def.allow_while_channeling then
                 local widgets = ui.items[def.id]
-                if widgets and current_health <= widgets.threshold:Get() then
-                    cast_item(def, hero, detection_enemies)
+                if widgets then
+                    local should_cast = true
+                    if widgets.threshold then
+                        should_cast = current_health <= widgets.threshold:Get()
+                    end
+                    if should_cast then
+                        cast_item(def, hero, detection_enemies)
+                    end
                 end
             end
         end
@@ -840,8 +979,11 @@ function auto_defender.OnUpdate()
         local def = item.def
         local widgets = ui.items[def.id]
         if widgets then
-            local threshold = widgets.threshold:Get()
-            if current_health <= threshold then
+            local should_cast = true
+            if widgets.threshold then
+                should_cast = current_health <= widgets.threshold:Get()
+            end
+            if should_cast then
                 cast_item(def, hero, detection_enemies)
             end
         end
