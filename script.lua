@@ -727,6 +727,10 @@ end
 
 local function has_ready_eul_combo(hero, detection_enemies, current_health)
     current_health = current_health or health_percent(hero)
+    local blink_def, blink_ability = find_ready_blink(hero, detection_enemies)
+    if not blink_def or not blink_ability then
+        return false
+    end
     for _, def in ipairs(ITEM_DEFINITIONS) do
         if def.cast == "eul_combo" then
             local widgets = ui.items[def.id]
@@ -830,8 +834,10 @@ local function find_ready_blink(hero, detection_enemies)
     return nil, nil
 end
 
-local function queue_blink_after_eul(eul_def, hero, detection_enemies)
-    local blink_def, blink_ability = find_ready_blink(hero, detection_enemies)
+local function queue_blink_after_eul(eul_def, hero, detection_enemies, blink_def, blink_ability)
+    if not blink_def or not blink_ability then
+        blink_def, blink_ability = find_ready_blink(hero, detection_enemies)
+    end
     if not blink_def or not blink_ability then
         return false
     end
@@ -1018,8 +1024,12 @@ end
 
 --#region Casting logic
 local function cast_eul_combo(def, hero, ability, detection_enemies)
+    local blink_def, blink_ability = find_ready_blink(hero, detection_enemies)
+    if not blink_def or not blink_ability then
+        return false
+    end
     Ability.CastTarget(ability, hero)
-    queue_blink_after_eul(def, hero, detection_enemies)
+    queue_blink_after_eul(def, hero, detection_enemies, blink_def, blink_ability)
     return true
 end
 
