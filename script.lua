@@ -11,7 +11,6 @@ local enemy_group = tab:Create("Enemy Checks", 3)
 
 local ui = {
     enable = activation_group:Switch("Enable", true),
-    cast_all = activation_group:Switch("Cast all when below threshold", false),
 }
 
 ui.enemy_range = enemy_group:Slider("Enemy detection range", 200, 2000, 900, "%d")
@@ -642,11 +641,7 @@ function auto_defender.OnUpdate()
 
         ensure_enemy_info()
 
-        if try_cast(hero, ability, def, hero_pos, enemy_list, nearest_enemy, team) then
-            if not ui.cast_all:Get() then
-                return
-            end
-        end
+        try_cast(hero, ability, def, hero_pos, enemy_list, nearest_enemy, team)
 
         ::continue::
     end
