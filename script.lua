@@ -469,7 +469,7 @@ local ITEM_DEFINITIONS = {
         threshold_default = 35,
         enemy_toggle = true,
         enemy_required_default = true,
-        modifier = "modifier_item_wind_waker",
+        modifier = "modifier_wind_waker",
         category = "utility",
     },
     {
@@ -749,17 +749,65 @@ end
 local pending_escapes = {}
 local pending_eul_blink = nil
 
+local INPUT_BLOCK_PREFIX = "auto_defender_escape_"
+local active_input_blocks = {}
+
+local function acquire_input_block(def_id)
+    if active_input_blocks[def_id] then
+        return active_input_blocks[def_id]
+    end
+    if not Input or not Input.Block then
+        return nil
+    end
+    local token = INPUT_BLOCK_PREFIX .. def_id
+    local success = Input.Block(token)
+    if success == nil or success then
+        active_input_blocks[def_id] = token
+        return token
+    end
+    return nil
+end
+
+local function release_input_block(def_id)
+    local token = active_input_blocks[def_id]
+    if token then
+        if Input and Input.Unblock then
+            Input.Unblock(token)
+        end
+        active_input_blocks[def_id] = nil
+    end
+end
+
+local function release_all_input_blocks()
+    if not next(active_input_blocks) then
+        return
+    end
+    if Input and Input.Unblock then
+        for def_id, token in pairs(active_input_blocks) do
+            Input.Unblock(token)
+            active_input_blocks[def_id] = nil
+        end
+    else
+        for def_id in pairs(active_input_blocks) do
+            active_input_blocks[def_id] = nil
+        end
+    end
+end
+
 local function clear_pending(def_id)
     if def_id then
         pending_escapes[def_id] = nil
+        release_input_block(def_id)
         if pending_eul_blink and pending_eul_blink.def and pending_eul_blink.def.id == def_id then
             pending_eul_blink = nil
         end
         return
     end
     for key in pairs(pending_escapes) do
+        release_input_block(key)
         pending_escapes[key] = nil
     end
+    release_all_input_blocks()
     pending_eul_blink = nil
 end
 
@@ -799,43 +847,68 @@ local function queue_blink_after_eul(eul_def, hero, detection_enemies)
         enemy = enemy,
         escape_position = escape_position,
         distance = blink_distance,
-        wait_modifier = eul_def and eul_def.modifier or "modifier_eul_cyclone",
+        wait_modifier = (eul_def and (eul_def.wait_modifier or eul_def.modifier)) or "modifier_eul_cyclone",
         expire_time = GameRules.GetGameTime() + 3.5,
     }
     return true
 end
 
-local function queue_force_escape(def, hero, ability, closest_enemy)
-    if pending_escapes[def.id] then
-        return true
+local function issue_escape_order(hero, position)
+    if not position then
+        return
     end
+    local player = Players.GetLocal()
+    if not player then
+        return
+    end
+    Player.PrepareUnitOrders(
+        player,
+        Enum.UnitOrder.DOTA_UNIT_ORDER_MOVE_TO_POSITION,
+        nil,
+        position,
+        nil,
+        Enum.PlayerOrderIssuer.DOTA_ORDER_ISSUER_HERO_ONLY,
+        hero,
+        false,
+        false,
+        nil,
+        true
+    )
+end
+
+local function remove_pending_escape(def_id)
+    pending_escapes[def_id] = nil
+    release_input_block(def_id)
+end
+
+local function queue_force_escape(def, hero, ability, closest_enemy)
     if def.active_modifier and NPC.HasModifier(hero, def.active_modifier) then
         return false
     end
     local distance = def.escape_distance or 600
     local escape_position = compute_escape_position(hero, closest_enemy, distance)
-    local player = Players.GetLocal()
-    if player then
-        Player.PrepareUnitOrders(
-            player,
-            Enum.UnitOrder.DOTA_UNIT_ORDER_MOVE_TO_POSITION,
-            nil,
-            escape_position,
-            nil,
-            Enum.PlayerOrderIssuer.DOTA_ORDER_ISSUER_HERO_ONLY,
-            hero,
-            false,
-            false,
-            nil,
-            true
-        )
+    if not escape_position then
+        return false
     end
     local delay = (ui.escape_turn_delay:Get() or 0) / 1000
+    local item_widgets = ui.items[def.id]
+    local entry = pending_escapes[def.id]
+    if entry then
+        entry.escape_position = escape_position
+        entry.execute_time = GameRules.GetGameTime() + delay
+        issue_escape_order(hero, escape_position)
+        return true
+    end
+    if not acquire_input_block(def.id) then
+        return false
+    end
+    issue_escape_order(hero, escape_position)
     pending_escapes[def.id] = {
         ability = ability,
         ability_index = Ability.GetIndex(ability),
         execute_time = GameRules.GetGameTime() + delay,
-        threshold_widget = ui.items[def.id].threshold,
+        threshold_widget = item_widgets and item_widgets.threshold or nil,
+        escape_position = escape_position,
     }
     return true
 end
@@ -844,18 +917,18 @@ local function process_pending_escapes(hero, detection_enemies)
     for def_id, entry in pairs(pending_escapes) do
         local def = ITEM_BY_ID[def_id]
         if not def then
-            pending_escapes[def_id] = nil
+            remove_pending_escape(def_id)
         else
             if not entry.ability or Ability.GetOwner(entry.ability) ~= hero then
-                pending_escapes[def_id] = nil
+                remove_pending_escape(def_id)
             else
                 local threshold = entry.threshold_widget and entry.threshold_widget:Get() or def.threshold_default or 0
                 if health_percent(hero) > threshold then
-                    pending_escapes[def_id] = nil
+                    remove_pending_escape(def_id)
                 elseif def.enemy_toggle then
                     local toggle = ui.items[def.id].requires_enemy
                     if toggle and toggle:Get() and (#detection_enemies == 0) then
-                        pending_escapes[def_id] = nil
+                        remove_pending_escape(def_id)
                     end
                 end
             end
@@ -866,16 +939,19 @@ local function process_pending_escapes(hero, detection_enemies)
     for def_id, entry in pairs(pending_escapes) do
         local def = ITEM_BY_ID[def_id]
         if not def then
-            pending_escapes[def_id] = nil
+            remove_pending_escape(def_id)
         else
-            if current_time >= entry.execute_time then
+            if entry.escape_position then
+                issue_escape_order(hero, entry.escape_position)
+            end
+            if not ability_is_valid(hero, entry.ability) then
+                remove_pending_escape(def_id)
+            elseif current_time >= entry.execute_time then
                 if NPC.IsChannellingAbility(hero) then
                     entry.execute_time = current_time + 0.05
                 else
-                    if ability_is_valid(hero, entry.ability) then
-                        Ability.CastTarget(entry.ability, hero)
-                    end
-                    pending_escapes[def_id] = nil
+                    Ability.CastTarget(entry.ability, hero)
+                    remove_pending_escape(def_id)
                 end
             end
         end
