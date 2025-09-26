@@ -84,7 +84,7 @@ local ITEM_DEFINITIONS = {
         icon = "panorama/images/items/wind_waker_png.vtex_c",
         display_name = "Wind Waker",
         type = "target_self",
-        modifier = "modifier_wind_waker_cyclone",
+        modifier = "modifier_item_wind_waker",
     },
     force = {
         item_name = "item_force_staff",
@@ -99,7 +99,7 @@ local ITEM_DEFINITIONS = {
         icon = "panorama/images/items/hurricane_pike_png.vtex_c",
         display_name = "Hurricane Pike",
         type = "escape_self",
-        modifier = "modifier_item_hurricane_pike_active",
+        modifier = "modifier_item_hurricane_pike",
         search_range = 1600,
     },
     atos = {
