@@ -410,6 +410,18 @@ for _, item in ipairs(priority_items) do
     end
 end
 
+local DEFAULT_ENEMY_CHECK_RANGE = 1200
+
+ui.enemy_detection_range = enemy_check_group:Slider(
+    "Enemy detection range",
+    200,
+    2500,
+    DEFAULT_ENEMY_CHECK_RANGE,
+    function(value)
+        return string.format("%d units", value)
+    end
+)
+
 local enemy_requirement_toggles = {}
 
 for _, item in ipairs(priority_items) do
@@ -500,6 +512,26 @@ local function get_switch_state(toggle)
     return nil
 end
 
+local function get_slider_value(slider)
+    if not slider then
+        return nil
+    end
+
+    if slider.Get then
+        return slider:Get()
+    end
+
+    if slider.GetValue then
+        return slider:GetValue()
+    end
+
+    if slider.value ~= nil then
+        return slider.value
+    end
+
+    return nil
+end
+
 local function should_require_enemy(item_key, definition)
     local toggle_state = get_switch_state(enemy_requirement_toggles[item_key])
     if toggle_state ~= nil then
@@ -513,6 +545,21 @@ local function should_require_enemy(item_key, definition)
     return false
 end
 
+local function get_enemy_detection_range(definition)
+    local range = DEFAULT_ENEMY_CHECK_RANGE
+
+    local slider_value = get_slider_value(ui.enemy_detection_range)
+    if slider_value and slider_value > 0 then
+        range = math.max(range, slider_value)
+    end
+
+    if definition and definition.search_range and definition.search_range > 0 then
+        range = math.max(range, definition.search_range)
+    end
+
+    return range
+end
+
 local function get_enabled_items()
     local ordered = priority_widget:List()
     local enabled = {}
@@ -524,6 +571,45 @@ local function get_enabled_items()
     end
 
     return enabled
+end
+
+local function get_enemies_in_range(hero, range)
+    if not hero or range <= 0 then
+        return {}
+    end
+
+    local hero_pos = Entity.GetAbsOrigin(hero)
+    if not hero_pos then
+        return {}
+    end
+
+    local hero_team = Entity.GetTeamNum(hero)
+    local all_heroes = Heroes.GetAll()
+    if not all_heroes or #all_heroes == 0 then
+        return {}
+    end
+
+    local enemies = {}
+
+    for _, enemy in ipairs(all_heroes) do
+        if enemy and enemy ~= hero then
+            if Entity.IsAlive(enemy) and not NPC.IsIllusion(enemy) then
+                if not Entity.IsDormant or not Entity.IsDormant(enemy) then
+                    if Entity.GetTeamNum(enemy) ~= hero_team then
+                        local enemy_pos = Entity.GetAbsOrigin(enemy)
+                        if enemy_pos then
+                            local distance = hero_pos:Distance2D(enemy_pos)
+                            if distance <= range then
+                                enemies[#enemies + 1] = enemy
+                            end
+                        end
+                    end
+                end
+            end
+        end
+    end
+
+    return enemies
 end
 
 local function get_inventory_item(hero, definition)
@@ -571,7 +657,7 @@ local function find_enemy_target(hero, ability, definition)
         return nil
     end
 
-    local enemies = Entity.GetHeroesInRadius(hero, range, Enum.TeamType.TEAM_ENEMY, true, true)
+    local enemies = get_enemies_in_range(hero, range)
     if not enemies or #enemies == 0 then
         return nil
     end
@@ -607,7 +693,7 @@ local function find_closest_enemy(hero, range)
         return nil
     end
 
-    local enemies = Entity.GetHeroesInRadius(hero, range, Enum.TeamType.TEAM_ENEMY, true, true)
+    local enemies = get_enemies_in_range(hero, range)
     if not enemies or #enemies == 0 then
         return nil
     end
@@ -697,6 +783,8 @@ local function get_escape_direction(hero, ability, definition)
     if ability then
         search_range = math.max(search_range, get_effective_cast_range(hero, ability, definition))
     end
+
+    search_range = math.max(search_range, get_enemy_detection_range(definition))
 
     local enemy = find_closest_enemy(hero, search_range)
     if not enemy then
@@ -902,7 +990,8 @@ local function cast_item(hero, item_key, game_time)
 
     if should_require_enemy(item_key, definition) then
         local range = get_effective_cast_range(hero, item, definition)
-        local enemies = Entity.GetHeroesInRadius(hero, range, Enum.TeamType.TEAM_ENEMY, true, true)
+        range = math.max(range, get_enemy_detection_range(definition))
+        local enemies = get_enemies_in_range(hero, range)
         if not enemies or #enemies == 0 then
             if is_escape_item then
                 clear_pending_escape(item_key)
