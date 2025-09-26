@@ -339,6 +339,15 @@ local ITEM_DEFINITIONS = {
         requires_enemy = true,
     },
     {
+        id = "orchid",
+        ability_names = { "item_orchid" },
+        display_name = "Orchid Malevolence",
+        icon = "panorama/images/items/orchid_png.vtex_c",
+        cast = "target_enemy",
+        threshold_default = 40,
+        requires_enemy = true,
+    },
+    {
         id = "bloodthorn",
         ability_names = { "item_bloodthorn" },
         display_name = "Bloodthorn",
