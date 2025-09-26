@@ -396,6 +396,93 @@ local FOUNTAIN_POS = {
 
 local recent_casts = {}
 local pending_escape_casts = {}
+local active_input_blocks = {}
+local active_input_block_count = 0
+local input_block_state_active = false
+
+local function set_input_block_state(block)
+    local success = false
+
+    if Input then
+        if type(Input.Block) == "function" then
+            Input.Block(block)
+            success = true
+        elseif type(Input.BlockInput) == "function" then
+            Input.BlockInput(block)
+            success = true
+        elseif type(Input.SetInputEnabled) == "function" then
+            Input.SetInputEnabled(not block)
+            success = true
+        elseif type(Input.SetGameInputEnabled) == "function" then
+            Input.SetGameInputEnabled(not block)
+            success = true
+        elseif type(Input.SetUserInputEnabled) == "function" then
+            Input.SetUserInputEnabled(not block)
+            success = true
+        end
+    end
+
+    if not success and Engine and type(Engine.ExecuteCommand) == "function" then
+        Engine.ExecuteCommand(block and "dota_player_suppress_commands 1" or "dota_player_suppress_commands 0")
+        success = true
+    elseif not success and CheatCommands and type(CheatCommands.ExecuteCommand) == "function" then
+        CheatCommands.ExecuteCommand(block and "dota_player_suppress_commands 1" or "dota_player_suppress_commands 0")
+        success = true
+    elseif not success and CheatCommands and type(CheatCommands.Execute) == "function" then
+        CheatCommands.Execute(block and "dota_player_suppress_commands 1" or "dota_player_suppress_commands 0")
+        success = true
+    end
+
+    return success
+end
+
+local function acquire_input_block(item_id)
+    if active_input_blocks[item_id] then
+        return true
+    end
+
+    if active_input_block_count == 0 then
+        if not set_input_block_state(true) then
+            return false
+        end
+        input_block_state_active = true
+    end
+
+    active_input_block_count = active_input_block_count + 1
+    active_input_blocks[item_id] = true
+
+    return true
+end
+
+local function release_input_block(item_id)
+    if not active_input_blocks[item_id] then
+        return
+    end
+
+    active_input_blocks[item_id] = nil
+
+    if active_input_block_count > 0 then
+        active_input_block_count = active_input_block_count - 1
+    end
+
+    if active_input_block_count <= 0 then
+        active_input_block_count = 0
+        if input_block_state_active then
+            set_input_block_state(false)
+            input_block_state_active = false
+        end
+    end
+end
+
+local function release_all_input_blocks()
+    if input_block_state_active then
+        set_input_block_state(false)
+        input_block_state_active = false
+    end
+
+    active_input_blocks = {}
+    active_input_block_count = 0
+end
 
 local function find_item(hero, def)
     if not def.ability_names then
@@ -573,9 +660,15 @@ local function queue_force_escape(hero, ability, def, hero_pos, nearest_enemy, t
 
     orient_for_escape(hero, escape_pos)
 
+    local threshold_slider = ui.thresholds and ui.thresholds[def.id] or nil
+    local threshold_value = threshold_slider and threshold_slider.Get and threshold_slider:Get() or nil
+    acquire_input_block(def.id)
+
     pending_escape_casts[def.id] = {
         execute_at = now + get_escape_turn_delay(),
         position = escape_pos,
+        threshold_slider = threshold_slider,
+        threshold_value = threshold_value,
     }
 
     return true
@@ -638,15 +731,23 @@ local function try_cast(hero, ability, def, hero_pos, enemies, nearest_enemy, te
     return false
 end
 
+local function remove_pending_escape(item_id)
+    release_input_block(item_id)
+    pending_escape_casts[item_id] = nil
+end
+
 local function clear_pending_escape()
     if next(pending_escape_casts) then
         for key in pairs(pending_escape_casts) do
-            pending_escape_casts[key] = nil
+            release_input_block(key)
         end
+        pending_escape_casts = {}
     end
+
+    release_all_input_blocks()
 end
 
-local function process_pending_escape(hero, now)
+local function process_pending_escape(hero, now, health_pct)
     if not next(pending_escape_casts) then
         return
     end
@@ -654,13 +755,25 @@ local function process_pending_escape(hero, now)
     for item_id, pending in pairs(pending_escape_casts) do
         repeat
             if not pending then
-                pending_escape_casts[item_id] = nil
+                remove_pending_escape(item_id)
                 break
             end
 
             local def = ITEM_BY_ID[item_id]
             if not def then
-                pending_escape_casts[item_id] = nil
+                remove_pending_escape(item_id)
+                break
+            end
+
+            local threshold
+            if pending.threshold_slider and pending.threshold_slider.Get then
+                threshold = pending.threshold_slider:Get() or 0
+            else
+                threshold = pending.threshold_value or 0
+            end
+
+            if threshold > 0 and health_pct and health_pct > threshold then
+                remove_pending_escape(item_id)
                 break
             end
 
@@ -672,18 +785,18 @@ local function process_pending_escape(hero, now)
             end
 
             if NPC.IsChannellingAbility(hero) and not def.allow_while_channeling then
-                pending_escape_casts[item_id] = nil
+                remove_pending_escape(item_id)
                 break
             end
 
             local ability = find_item(hero, def)
             if not ability then
-                pending_escape_casts[item_id] = nil
+                remove_pending_escape(item_id)
                 break
             end
 
             if item_on_cooldown(hero, ability) then
-                pending_escape_casts[item_id] = nil
+                remove_pending_escape(item_id)
                 break
             end
 
@@ -698,7 +811,7 @@ local function process_pending_escape(hero, now)
                 recent_casts[index] = now
             end
 
-            pending_escape_casts[item_id] = nil
+            remove_pending_escape(item_id)
         until true
     end
 end
@@ -719,12 +832,12 @@ function auto_defender.OnUpdate()
         return
     end
 
-    local now = GameRules.GetGameTime()
-    process_pending_escape(hero, now)
-
     local health = Entity.GetHealth(hero)
     local max_health = math.max(Entity.GetMaxHealth(hero), 1)
     local health_pct = (health / max_health) * 100
+    local now = GameRules.GetGameTime()
+
+    process_pending_escape(hero, now, health_pct)
     local team = Entity.GetTeamNum(hero)
 
     local is_channeling = NPC.IsChannellingAbility(hero)
@@ -804,6 +917,7 @@ end
 function auto_defender.OnGameStart()
     recent_casts = {}
     pending_escape_casts = {}
+    release_all_input_blocks()
 end
 
 auto_defender.OnGameEnd = auto_defender.OnGameStart
