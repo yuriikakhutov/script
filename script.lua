@@ -24,10 +24,21 @@ end
 local activation_group = tab:Create("Activation")
 local priority_group = tab:Create("Item Priority", 1)
 local threshold_group = tab:Create("Item Thresholds", 2)
+local enemy_check_group = tab:Create("Enemy Checks", 3)
 
 local ui = {
     enable = activation_group:Switch("Enable", true),
 }
+
+ui.escape_turn_delay = activation_group:Slider(
+    "Escape turn delay",
+    0,
+    0.5,
+    0.2,
+    function(value)
+        return string.format("%.2fs", value)
+    end
+)
 
 local ITEM_DEFINITIONS = {
     glimmer = {
@@ -36,6 +47,8 @@ local ITEM_DEFINITIONS = {
         display_name = "Glimmer Cape",
         type = "target_self",
         modifier = "modifier_item_glimmer_cape_fade",
+        requires_enemy = true,
+        enemy_toggle = true,
     },
     ghost = {
         item_name = "item_ghost",
@@ -43,6 +56,8 @@ local ITEM_DEFINITIONS = {
         display_name = "Ghost Scepter",
         type = "no_target",
         modifier = "modifier_ghost_state",
+        requires_enemy = true,
+        enemy_toggle = true,
     },
     bkb = {
         item_name = "item_black_king_bar",
@@ -50,6 +65,8 @@ local ITEM_DEFINITIONS = {
         display_name = "Black King Bar",
         type = "no_target",
         modifier = "modifier_black_king_bar_immune",
+        requires_enemy = true,
+        enemy_toggle = true,
     },
     lotus = {
         item_name = "item_lotus_orb",
@@ -57,6 +74,8 @@ local ITEM_DEFINITIONS = {
         display_name = "Lotus Orb",
         type = "target_self",
         modifier = "modifier_item_lotus_orb_active",
+        requires_enemy = true,
+        enemy_toggle = true,
     },
     crimson = {
         item_name = "item_crimson_guard",
@@ -64,6 +83,8 @@ local ITEM_DEFINITIONS = {
         display_name = "Crimson Guard",
         type = "no_target",
         modifier = "modifier_item_crimson_guard_extra",
+        requires_enemy = true,
+        enemy_toggle = true,
     },
     blade_mail = {
         item_name = "item_blade_mail",
@@ -71,6 +92,8 @@ local ITEM_DEFINITIONS = {
         display_name = "Blade Mail",
         type = "no_target",
         modifier = "modifier_item_blade_mail_reflect",
+        requires_enemy = true,
+        enemy_toggle = true,
     },
     eul = {
         item_name = "item_cyclone",
@@ -78,6 +101,8 @@ local ITEM_DEFINITIONS = {
         display_name = "Eul's Scepter",
         type = "target_self",
         modifier = "modifier_eul_cyclone",
+        requires_enemy = true,
+        enemy_toggle = true,
     },
     wind_waker = {
         item_name = "item_wind_waker",
@@ -85,6 +110,8 @@ local ITEM_DEFINITIONS = {
         display_name = "Wind Waker",
         type = "target_self",
         modifier = "modifier_wind_waker_cyclone",
+        requires_enemy = true,
+        enemy_toggle = true,
     },
     force = {
         item_name = "item_force_staff",
@@ -158,6 +185,7 @@ local ITEM_DEFINITIONS = {
         modifier = "modifier_item_silver_edge_windwalk",
         requires_enemy = true,
         search_range = 1200,
+        enemy_toggle = true,
     },
     shadow_blade = {
         item_name = "item_invis_sword",
@@ -167,6 +195,7 @@ local ITEM_DEFINITIONS = {
         modifier = "modifier_item_invis_sword_windwalk",
         requires_enemy = true,
         search_range = 1200,
+        enemy_toggle = true,
     },
     disperser = {
         item_name = "item_disperser",
@@ -174,6 +203,8 @@ local ITEM_DEFINITIONS = {
         display_name = "Disperser",
         type = "target_self",
         modifier = "modifier_item_disperser_active",
+        requires_enemy = true,
+        enemy_toggle = true,
     },
     pipe = {
         item_name = "item_pipe",
@@ -181,6 +212,8 @@ local ITEM_DEFINITIONS = {
         display_name = "Pipe of Insight",
         type = "no_target",
         modifier = "modifier_item_pipe_barrier",
+        requires_enemy = true,
+        enemy_toggle = true,
     },
     ethereal = {
         item_name = "item_ethereal_blade",
@@ -188,6 +221,8 @@ local ITEM_DEFINITIONS = {
         display_name = "Ethereal Blade",
         type = "target_self",
         modifier = "modifier_item_ethereal_blade_ethereal",
+        requires_enemy = true,
+        enemy_toggle = true,
     },
     nullifier = {
         item_name = "item_nullifier",
@@ -234,6 +269,8 @@ local ITEM_DEFINITIONS = {
         type = "target_self",
         modifier = "modifier_item_urn_heal",
         requires_charges = true,
+        requires_enemy = true,
+        enemy_toggle = true,
     },
     spirit_vessel = {
         item_name = "item_spirit_vessel",
@@ -242,6 +279,8 @@ local ITEM_DEFINITIONS = {
         type = "target_self",
         modifier = "modifier_item_spirit_vessel_heal",
         requires_charges = true,
+        requires_enemy = true,
+        enemy_toggle = true,
     },
     blink = {
         item_name = "item_blink",
@@ -281,6 +320,8 @@ local ITEM_DEFINITIONS = {
         display_name = "Solar Crest",
         type = "target_self",
         modifier = "modifier_item_solar_crest_armor_addition",
+        requires_enemy = true,
+        enemy_toggle = true,
     },
     drums = {
         item_name = "item_ancient_janggo",
@@ -288,6 +329,8 @@ local ITEM_DEFINITIONS = {
         display_name = "Drum of Endurance",
         type = "no_target",
         modifier = "modifier_item_ancient_janggo_active",
+        requires_enemy = true,
+        enemy_toggle = true,
     },
     boots_of_bearing = {
         item_name = "item_boots_of_bearing",
@@ -295,6 +338,8 @@ local ITEM_DEFINITIONS = {
         display_name = "Boots of Bearing",
         type = "no_target",
         modifier = "modifier_item_boots_of_bearing_active",
+        requires_enemy = true,
+        enemy_toggle = true,
     },
 }
 
@@ -357,6 +402,19 @@ for _, item in ipairs(priority_items) do
     end
 end
 
+local enemy_requirement_toggles = {}
+
+for _, item in ipairs(priority_items) do
+    local key = item[1]
+    local definition = ITEM_DEFINITIONS[key]
+    if definition and definition.enemy_toggle then
+        enemy_requirement_toggles[key] = enemy_check_group:Switch(
+            string.format("%s: require nearby enemy", definition.display_name),
+            definition.requires_enemy and true or false
+        )
+    end
+end
+
 local CAST_COOLDOWN = 0.2
 local last_cast_times = {}
 
@@ -392,6 +450,19 @@ end
 
 local function mark_cast(item_id, game_time)
     last_cast_times[item_id] = game_time
+end
+
+local function should_require_enemy(item_key, definition)
+    local toggle = enemy_requirement_toggles[item_key]
+    if toggle and toggle.Get then
+        return toggle:Get()
+    end
+
+    if definition and definition.requires_enemy ~= nil then
+        return definition.requires_enemy
+    end
+
+    return false
 end
 
 local function get_enabled_items()
@@ -599,10 +670,19 @@ local function get_escape_direction(hero, ability, definition)
     return direction, enemy
 end
 
-local ESCAPE_TURN_DELAY = 0.2
+local DEFAULT_ESCAPE_TURN_DELAY = 0.2
 local pending_escape_casts = {}
 local escape_input_blockers = {}
 local escape_input_blocked = false
+
+local function get_escape_turn_delay()
+    local slider = ui.escape_turn_delay
+    if slider and slider.Get then
+        return slider:Get()
+    end
+
+    return DEFAULT_ESCAPE_TURN_DELAY
+end
 
 local function apply_input_block_state(blocked)
     if blocked == escape_input_blocked then
@@ -708,7 +788,15 @@ local function cast_item(hero, item_key, game_time)
         return false
     end
 
-    local is_escape_item = definition.type == "escape_self"
+    local item_type = definition.type
+    local is_escape_item = item_type == "escape_self"
+
+    if NPC.IsChanneling(hero) and not definition.allow_while_channeling then
+        if is_escape_item then
+            clear_pending_escape(item_key)
+        end
+        return false
+    end
 
     if is_recently_cast(item_key, game_time) then
         if is_escape_item then
@@ -764,7 +852,7 @@ local function cast_item(hero, item_key, game_time)
         return false
     end
 
-    if definition.requires_enemy then
+    if should_require_enemy(item_key, definition) then
         local range = get_effective_cast_range(hero, item, definition)
         local enemies = Entity.GetHeroesInRadius(hero, range, Enum.TeamType.TEAM_ENEMY, true, true)
         if not enemies or #enemies == 0 then
@@ -775,18 +863,18 @@ local function cast_item(hero, item_key, game_time)
         end
     end
 
-    if definition.type == "no_target" then
+    if item_type == "no_target" then
         Ability.CastNoTarget(item)
-    elseif definition.type == "target_self" then
+    elseif item_type == "target_self" then
         Ability.CastTarget(item, hero)
-    elseif definition.type == "target_enemy" then
+    elseif item_type == "target_enemy" then
         local target = find_enemy_target(hero, item, definition)
         if not target then
             return false
         end
 
         Ability.CastTarget(item, target)
-    elseif definition.type == "position_enemy" then
+    elseif item_type == "position_enemy" then
         local target = find_enemy_target(hero, item, definition)
         if not target then
             return false
@@ -798,7 +886,7 @@ local function cast_item(hero, item_key, game_time)
         end
 
         Ability.CastPosition(item, target_pos)
-    elseif definition.type == "escape_self" then
+    elseif item_type == "escape_self" then
         local direction, enemy = get_escape_direction(hero, item, definition)
         if not direction then
             clear_pending_escape(item_key)
@@ -809,7 +897,7 @@ local function cast_item(hero, item_key, game_time)
 
         if needs_new_escape(direction, enemy, pending) then
             pending_escape_casts[item_key] = {
-                ready_time = game_time + ESCAPE_TURN_DELAY,
+                start_time = game_time,
                 direction = direction,
                 enemy = enemy,
             }
@@ -820,15 +908,18 @@ local function cast_item(hero, item_key, game_time)
 
         pending.direction = direction
 
-        if game_time < pending.ready_time then
+        local delay = get_escape_turn_delay()
+        local start_time = pending.start_time or game_time
+        if game_time - start_time < delay then
             face_direction(hero, pending.direction)
             return false
         end
 
+        pending.start_time = start_time
         face_direction(hero, pending.direction)
         Ability.CastTarget(item, hero)
         clear_pending_escape(item_key)
-    elseif definition.type == "escape_position" then
+    elseif item_type == "escape_position" then
         local direction = get_escape_direction(hero, item, definition)
         if not direction then
             return false
