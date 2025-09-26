@@ -7,21 +7,39 @@ local tab = Menu.Create("General", "Auto Defender", "Auto Defender", "Auto Defen
 
 local info_group = tab:Create("Info")
 local activation_group = tab:Create("Activation", 1)
-local items_group = tab:Create("Items", 2)
-local priority_group = tab:Create("Priority", 3)
-local threshold_group = tab:Create("Health Thresholds", 4)
-local enemy_group = tab:Create("Enemy Checks", 5)
+local detection_group = tab:Create("Enemy Detection", 2)
 
 info_group:Label("Author: GhostyPowa")
+
+local SECTION_LAYOUT = {
+    { id = "defensive", title = "Defensive Items", order = 3 },
+    { id = "escape", title = "Escape Tools", order = 7 },
+    { id = "utility", title = "Utility Combos", order = 11 },
+    { id = "offensive", title = "Offensive Items", order = 15 },
+}
+
+local section_groups = {}
+for _, section in ipairs(SECTION_LAYOUT) do
+    local base = section.order
+    local toggles = tab:Create(section.title .. " - Toggles", base)
+    local priority = tab:Create(section.title .. " - Priority", base + 1)
+    local thresholds = tab:Create(section.title .. " - Thresholds", base + 2)
+    local enemy_checks = tab:Create(section.title .. " - Enemy Checks", base + 3)
+    priority:Label("Lower priority value means the item attempts earlier")
+    section_groups[section.id] = {
+        toggles = toggles,
+        priority = priority,
+        thresholds = thresholds,
+        enemy = enemy_checks,
+    }
+end
 
 local ui = {
     enable = activation_group:Switch("Enable", true),
     escape_turn_delay = activation_group:Slider("Force/Hurricane turn delay (ms)", 0, 500, 200, "%dms"),
-    enemy_range = enemy_group:Slider("Enemy detection range", 200, 2000, 900, "%d"),
+    enemy_range = detection_group:Slider("Enemy detection range", 200, 2000, 900, "%d"),
     items = {},
 }
-
-priority_group:Label("Lower priority value means the item attempts earlier")
 
 --#endregion
 
@@ -37,6 +55,7 @@ local ITEM_DEFINITIONS = {
         enemy_toggle = true,
         enemy_required_default = true,
         modifier = "modifier_item_glimmer_cape_fade",
+        category = "defensive",
     },
     {
         id = "ghost",
@@ -48,6 +67,7 @@ local ITEM_DEFINITIONS = {
         enemy_toggle = true,
         enemy_required_default = true,
         modifier = "modifier_ghost_state",
+        category = "defensive",
     },
     {
         id = "bkb",
@@ -59,6 +79,7 @@ local ITEM_DEFINITIONS = {
         enemy_toggle = true,
         enemy_required_default = true,
         modifier = "modifier_black_king_bar_immune",
+        category = "defensive",
     },
     {
         id = "pipe",
@@ -70,6 +91,7 @@ local ITEM_DEFINITIONS = {
         enemy_toggle = true,
         enemy_required_default = true,
         modifier = "modifier_item_pipe_barrier",
+        category = "defensive",
     },
     {
         id = "crimson",
@@ -81,6 +103,7 @@ local ITEM_DEFINITIONS = {
         enemy_toggle = true,
         enemy_required_default = true,
         modifier = "modifier_item_crimson_guard_nostack",
+        category = "defensive",
     },
     {
         id = "blade_mail",
@@ -92,6 +115,7 @@ local ITEM_DEFINITIONS = {
         enemy_toggle = true,
         enemy_required_default = true,
         modifier = "modifier_item_blade_mail_reflect",
+        category = "defensive",
     },
     {
         id = "lotus",
@@ -103,6 +127,7 @@ local ITEM_DEFINITIONS = {
         enemy_toggle = true,
         enemy_required_default = true,
         modifier = "modifier_item_lotus_orb_active",
+        category = "defensive",
     },
     {
         id = "solar_crest",
@@ -114,6 +139,7 @@ local ITEM_DEFINITIONS = {
         enemy_toggle = true,
         enemy_required_default = true,
         modifier = "modifier_item_solar_crest_armor",
+        category = "defensive",
     },
     {
         id = "drum",
@@ -125,6 +151,7 @@ local ITEM_DEFINITIONS = {
         enemy_toggle = true,
         enemy_required_default = true,
         requires_charges = true,
+        category = "defensive",
     },
     {
         id = "bearing",
@@ -136,6 +163,7 @@ local ITEM_DEFINITIONS = {
         enemy_toggle = true,
         enemy_required_default = true,
         requires_charges = true,
+        category = "defensive",
     },
     {
         id = "force",
@@ -148,6 +176,7 @@ local ITEM_DEFINITIONS = {
         enemy_required_default = true,
         escape_distance = 600,
         active_modifier = "modifier_item_force_staff_active",
+        category = "escape",
     },
     {
         id = "hurricane",
@@ -160,6 +189,7 @@ local ITEM_DEFINITIONS = {
         enemy_required_default = true,
         escape_distance = 600,
         active_modifier = "modifier_item_hurricane_pike",
+        category = "escape",
     },
     {
         id = "blink",
@@ -171,6 +201,7 @@ local ITEM_DEFINITIONS = {
         enemy_toggle = true,
         enemy_required_default = true,
         blink_range = 1200,
+        category = "escape",
     },
     {
         id = "swift_blink",
@@ -182,6 +213,7 @@ local ITEM_DEFINITIONS = {
         enemy_toggle = true,
         enemy_required_default = true,
         blink_range = 1200,
+        category = "escape",
     },
     {
         id = "arcane_blink",
@@ -193,6 +225,7 @@ local ITEM_DEFINITIONS = {
         enemy_toggle = true,
         enemy_required_default = true,
         blink_range = 1200,
+        category = "escape",
     },
     {
         id = "overwhelming_blink",
@@ -204,6 +237,7 @@ local ITEM_DEFINITIONS = {
         enemy_toggle = true,
         enemy_required_default = true,
         blink_range = 1200,
+        category = "escape",
     },
     {
         id = "meteor",
@@ -215,6 +249,7 @@ local ITEM_DEFINITIONS = {
         enemy_toggle = true,
         enemy_required_default = true,
         cast_range_override = 600,
+        category = "utility",
     },
     {
         id = "blood_grenade",
@@ -227,6 +262,7 @@ local ITEM_DEFINITIONS = {
         enemy_required_default = true,
         requires_charges = true,
         cast_range_override = 900,
+        category = "offensive",
     },
     {
         id = "urn",
@@ -238,6 +274,7 @@ local ITEM_DEFINITIONS = {
         enemy_toggle = true,
         enemy_required_default = true,
         requires_charges = true,
+        category = "defensive",
     },
     {
         id = "vessel",
@@ -249,6 +286,7 @@ local ITEM_DEFINITIONS = {
         enemy_toggle = true,
         enemy_required_default = true,
         requires_charges = true,
+        category = "defensive",
     },
     {
         id = "disperser",
@@ -260,6 +298,7 @@ local ITEM_DEFINITIONS = {
         enemy_toggle = true,
         enemy_required_default = true,
         modifier = "modifier_item_disperser_speed",
+        category = "defensive",
     },
     {
         id = "eul",
@@ -271,6 +310,7 @@ local ITEM_DEFINITIONS = {
         enemy_toggle = true,
         enemy_required_default = true,
         modifier = "modifier_eul_cyclone",
+        category = "utility",
     },
     {
         id = "ethereal",
@@ -282,6 +322,7 @@ local ITEM_DEFINITIONS = {
         enemy_toggle = true,
         enemy_required_default = true,
         modifier = "modifier_item_ethereal_blade_ethereal",
+        category = "defensive",
     },
     {
         id = "halberd",
@@ -293,6 +334,7 @@ local ITEM_DEFINITIONS = {
         enemy_toggle = true,
         enemy_required_default = true,
         cast_range_override = 600,
+        category = "offensive",
     },
     {
         id = "atos",
@@ -304,6 +346,7 @@ local ITEM_DEFINITIONS = {
         enemy_toggle = true,
         enemy_required_default = true,
         cast_range_override = 1100,
+        category = "offensive",
     },
     {
         id = "gleipnir",
@@ -315,6 +358,7 @@ local ITEM_DEFINITIONS = {
         enemy_toggle = true,
         enemy_required_default = true,
         cast_range_override = 1100,
+        category = "offensive",
     },
     {
         id = "diffusal",
@@ -326,6 +370,7 @@ local ITEM_DEFINITIONS = {
         enemy_toggle = true,
         enemy_required_default = true,
         cast_range_override = 600,
+        category = "offensive",
     },
     {
         id = "nullifier",
@@ -337,6 +382,7 @@ local ITEM_DEFINITIONS = {
         enemy_toggle = true,
         enemy_required_default = true,
         cast_range_override = 900,
+        category = "offensive",
     },
     {
         id = "orchid",
@@ -348,6 +394,7 @@ local ITEM_DEFINITIONS = {
         enemy_toggle = true,
         enemy_required_default = true,
         cast_range_override = 900,
+        category = "offensive",
     },
     {
         id = "bloodthorn",
@@ -359,6 +406,7 @@ local ITEM_DEFINITIONS = {
         enemy_toggle = true,
         enemy_required_default = true,
         cast_range_override = 900,
+        category = "offensive",
     },
     {
         id = "hex",
@@ -370,6 +418,7 @@ local ITEM_DEFINITIONS = {
         enemy_toggle = true,
         enemy_required_default = true,
         cast_range_override = 800,
+        category = "offensive",
     },
     {
         id = "abyssal",
@@ -381,6 +430,7 @@ local ITEM_DEFINITIONS = {
         enemy_toggle = true,
         enemy_required_default = true,
         cast_range_override = 600,
+        category = "offensive",
     },
     {
         id = "dagon",
@@ -398,6 +448,7 @@ local ITEM_DEFINITIONS = {
         enemy_toggle = true,
         enemy_required_default = true,
         cast_range_override = 800,
+        category = "offensive",
     },
     {
         id = "wind_waker",
@@ -409,6 +460,7 @@ local ITEM_DEFINITIONS = {
         enemy_toggle = true,
         enemy_required_default = true,
         modifier = "modifier_item_wind_waker",
+        category = "utility",
     },
     {
         id = "silver_edge",
@@ -420,6 +472,7 @@ local ITEM_DEFINITIONS = {
         enemy_toggle = true,
         enemy_required_default = true,
         cast_range_override = 600,
+        category = "offensive",
     },
     {
         id = "shadow_blade",
@@ -431,6 +484,7 @@ local ITEM_DEFINITIONS = {
         enemy_toggle = true,
         enemy_required_default = true,
         modifier = "modifier_invisible",
+        category = "offensive",
     },
 }
 
@@ -438,16 +492,36 @@ local ITEM_BY_ID = {}
 local BLINK_ITEM_IDS = { "blink", "swift_blink", "arcane_blink", "overwhelming_blink" }
 --#endregion
 
+local function apply_icon(widget, icon)
+    if not widget or not icon then
+        return
+    end
+    if widget.SetImage then
+        widget:SetImage(icon)
+    elseif widget.SetIcon then
+        widget:SetIcon(icon)
+    elseif widget.Image then
+        widget:Image(icon)
+    elseif widget.Icon then
+        widget:Icon(icon)
+    end
+end
+
 for index, def in ipairs(ITEM_DEFINITIONS) do
     ITEM_BY_ID[def.id] = def
+    local section = section_groups[def.category or "defensive"] or section_groups.defensive
     local entry = {}
-    entry.enabled = items_group:Switch(def.display_name, true)
-    entry.priority = priority_group:Slider(def.display_name .. " priority", 1, #ITEM_DEFINITIONS, index, "%d")
+    entry.enabled = section.toggles:Switch(def.display_name, true)
+    apply_icon(entry.enabled, def.icon)
+    entry.priority = section.priority:Slider(def.display_name .. " priority", 1, #ITEM_DEFINITIONS, index, "%d")
+    apply_icon(entry.priority, def.icon)
     if not def.no_threshold then
-        entry.threshold = threshold_group:Slider(def.display_name .. " threshold", 1, 100, def.threshold_default or 50, "%d%%")
+        entry.threshold = section.thresholds:Slider(def.display_name .. " threshold", 1, 100, def.threshold_default or 50, "%d%%")
+        apply_icon(entry.threshold, def.icon)
     end
     if def.enemy_toggle then
-        entry.requires_enemy = enemy_group:Switch(def.display_name .. " requires enemy", def.enemy_required_default or false)
+        entry.requires_enemy = section.enemy:Switch(def.display_name .. " requires enemy", def.enemy_required_default or false)
+        apply_icon(entry.requires_enemy, def.icon)
     end
     ui.items[def.id] = entry
 end
