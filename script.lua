@@ -573,6 +573,99 @@ local function get_enabled_items()
     return enabled
 end
 
+local function get_vector_component(vector, component)
+    if not vector then
+        return nil
+    end
+
+    local lower = string.lower(component)
+    local upper = string.upper(component)
+
+    if vector[lower] ~= nil then
+        return vector[lower]
+    end
+
+    if vector[upper] ~= nil then
+        return vector[upper]
+    end
+
+    local getter = "Get" .. upper
+    local method = vector[getter]
+    if method then
+        local success, value = pcall(method, vector)
+        if success then
+            return value
+        end
+    end
+
+    return nil
+end
+
+local function vector_distance2d(a, b)
+    if not a or not b then
+        return math.huge
+    end
+
+    local ax = get_vector_component(a, "x")
+    local ay = get_vector_component(a, "y")
+    local bx = get_vector_component(b, "x")
+    local by = get_vector_component(b, "y")
+
+    if ax and ay and bx and by then
+        local dx = ax - bx
+        local dy = ay - by
+        return math.sqrt(dx * dx + dy * dy)
+    end
+
+    if a.Distance2D then
+        local success, value = pcall(a.Distance2D, a, b)
+        if success and value then
+            return value
+        end
+    end
+
+    if b.Distance2D then
+        local success, value = pcall(b.Distance2D, b, a)
+        if success and value then
+            return value
+        end
+    end
+
+    return math.huge
+end
+
+local function add_enemy_if_valid(hero, hero_team, hero_pos, range, enemies, enemy)
+    if not enemy or enemy == hero then
+        return
+    end
+
+    if not Entity.IsAlive(enemy) or NPC.IsIllusion(enemy) then
+        return
+    end
+
+    if Entity.IsDormant and Entity.IsDormant(enemy) then
+        return
+    end
+
+    if Entity.GetTeamNum(enemy) == hero_team then
+        return
+    end
+
+    if range and range > 0 then
+        local enemy_pos = Entity.GetAbsOrigin(enemy)
+        if not enemy_pos then
+            return
+        end
+
+        local distance = vector_distance2d(hero_pos, enemy_pos)
+        if distance > range then
+            return
+        end
+    end
+
+    enemies[#enemies + 1] = enemy
+end
+
 local function get_enemies_in_range(hero, range)
     if not hero or range <= 0 then
         return {}
@@ -584,26 +677,44 @@ local function get_enemies_in_range(hero, range)
     end
 
     local hero_team = Entity.GetTeamNum(hero)
-    local all_heroes = Heroes.GetAll()
-    if not all_heroes or #all_heroes == 0 then
+    if not hero_team then
         return {}
     end
 
     local enemies = {}
 
-    for _, enemy in ipairs(all_heroes) do
-        if enemy and enemy ~= hero then
-            if Entity.IsAlive(enemy) and not NPC.IsIllusion(enemy) then
-                if not Entity.IsDormant or not Entity.IsDormant(enemy) then
-                    if Entity.GetTeamNum(enemy) ~= hero_team then
-                        local enemy_pos = Entity.GetAbsOrigin(enemy)
-                        if enemy_pos then
-                            local distance = hero_pos:Distance2D(enemy_pos)
-                            if distance <= range then
-                                enemies[#enemies + 1] = enemy
-                            end
-                        end
-                    end
+    if NPC.GetHeroesInRadius and Enum and Enum.TeamType then
+        local nearby = NPC.GetHeroesInRadius(hero, range, Enum.TeamType.TEAM_ENEMY)
+        if nearby and #nearby > 0 then
+            for _, enemy in ipairs(nearby) do
+                add_enemy_if_valid(hero, hero_team, hero_pos, nil, enemies, enemy)
+            end
+        end
+
+        if #enemies > 0 then
+            return enemies
+        end
+    end
+
+    if Heroes and Heroes.GetAll then
+        local all_heroes = Heroes.GetAll()
+        if all_heroes and #all_heroes > 0 then
+            for _, enemy in ipairs(all_heroes) do
+                add_enemy_if_valid(hero, hero_team, hero_pos, range, enemies, enemy)
+            end
+        end
+    elseif Heroes and Heroes.Count and Heroes.Get then
+        local count = Heroes.Count()
+        if count and count > 0 then
+            for i = 1, count do
+                local enemy = Heroes.Get(i)
+                add_enemy_if_valid(hero, hero_team, hero_pos, range, enemies, enemy)
+            end
+
+            if #enemies == 0 then
+                for i = 0, count - 1 do
+                    local enemy = Heroes.Get(i)
+                    add_enemy_if_valid(hero, hero_team, hero_pos, range, enemies, enemy)
                 end
             end
         end
@@ -675,7 +786,7 @@ local function find_enemy_target(hero, ability, definition)
             if not definition.enemy_modifier or not NPC.HasModifier(enemy, definition.enemy_modifier) then
                 local enemy_pos = Entity.GetAbsOrigin(enemy)
                 if enemy_pos then
-                    local distance = hero_pos:Distance2D(enemy_pos)
+                    local distance = vector_distance2d(hero_pos, enemy_pos)
                     if distance < closest_distance then
                         closest_distance = distance
                         closest_enemy = enemy
@@ -710,7 +821,7 @@ local function find_closest_enemy(hero, range)
         if enemy and Entity.IsAlive(enemy) and not NPC.IsIllusion(enemy) then
             local enemy_pos = Entity.GetAbsOrigin(enemy)
             if enemy_pos then
-                local distance = hero_pos:Distance2D(enemy_pos)
+                local distance = vector_distance2d(hero_pos, enemy_pos)
                 if distance < closest_distance then
                     closest_distance = distance
                     closest_enemy = enemy
