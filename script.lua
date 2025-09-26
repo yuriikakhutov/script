@@ -16,94 +16,41 @@ local detection_group = overview_page:Create("Enemy Detection")
 
 info_group:Label("Author: GhostyPowa")
 
-local function create_section_tab(second_name, third_name, opts)
-    opts = opts or {}
+local function create_section_tab(second_name, third_name)
     local second_tab = Menu.Create(MAIN_FIRST_TAB, MAIN_SECTION, second_name)
     local third_tab = second_tab:Create(third_name or second_name)
     local toggles = third_tab:Create("Toggles")
     local priority = third_tab:Create("Priority")
     local thresholds = third_tab:Create("Thresholds")
     local enemy_checks = third_tab:Create("Enemy Checks")
-    local dependencies
-    if opts.dependencies then
-        dependencies = third_tab:Create("Dependencies")
-    end
     priority:Label("Lower priority value means the item attempts earlier")
     return {
         toggles = toggles,
         priority = priority,
         thresholds = thresholds,
         enemy = enemy_checks,
-        dependencies = dependencies,
     }
 end
 
 local SECTION_LAYOUT = {
     { id = "defensive", second = "Defensive", third = "Defensive Items" },
     { id = "escape", second = "Escape", third = "Escape Tools" },
-    { id = "utility", second = "Utility", third = "Utility Combos", dependencies = true },
+    { id = "utility", second = "Utility", third = "Utility Combos" },
     { id = "offensive", second = "Offensive", third = "Offensive Items" },
 }
 
 local section_groups = {}
 for _, section in ipairs(SECTION_LAYOUT) do
-    section_groups[section.id] = create_section_tab(section.second, section.third, section)
+    section_groups[section.id] = create_section_tab(section.second, section.third)
 end
 
 local ui = {
     enable = activation_group:Switch("Enable", true),
-    debug = activation_group:Switch("Enable debug logging", false),
     escape_turn_delay = activation_group:Slider("Force/Hurricane turn delay (ms)", 0, 500, 200, "%dms"),
     enemy_range = detection_group:Slider("Enemy detection range", 200, 2000, 900, "%d"),
     items = {},
-    dependencies = {},
 }
 
---#endregion
-
---#region Debug helpers
-local DEBUG_REPEAT_SUPPRESS = 0.75
-local debug_cache = {}
-
-local function is_debug_enabled()
-    return ui.debug and ui.debug.Get and ui.debug:Get()
-end
-
-local function emit_debug_message(message)
-    if Log and Log.Write then
-        Log.Write(message)
-    elseif Console and Console.Print then
-        Console.Print(message)
-    else
-        print(message)
-    end
-end
-
-local function debug_log(def, message)
-    if not is_debug_enabled() then
-        return
-    end
-    local def_id = def and def.id or "general"
-    local now = (GameRules and GameRules.GetGameTime and GameRules.GetGameTime()) or os.clock()
-    local entry = debug_cache[def_id]
-    if entry and entry.message == message and now - entry.time < DEBUG_REPEAT_SUPPRESS then
-        return
-    end
-    debug_cache[def_id] = { message = message, time = now }
-    local label = def and def.display_name or "General"
-    emit_debug_message(string.format("[Auto Defender] %s: %s", label, message))
-end
-
-local function debug_clear(def_id)
-    if not is_debug_enabled() then
-        return
-    end
-    if def_id then
-        debug_cache[def_id] = nil
-    else
-        debug_cache = {}
-    end
-end
 --#endregion
 
 --#region Item definitions
@@ -570,29 +517,6 @@ local function apply_icon(widget, icon)
     end
 end
 
-local function get_item_icon(item_id)
-    for _, definition in ipairs(ITEM_DEFINITIONS) do
-        if definition.id == item_id then
-            return definition.icon
-        end
-    end
-    return nil
-end
-
-if section_groups.utility and section_groups.utility.dependencies then
-    ui.dependencies.meteor_requires_glimmer = section_groups.utility.dependencies:Switch(
-        "Require Glimmer Cape before Meteor Hammer",
-        true
-    )
-    apply_icon(ui.dependencies.meteor_requires_glimmer, get_item_icon("meteor"))
-
-    ui.dependencies.cyclone_requires_blink = section_groups.utility.dependencies:Switch(
-        "Require Blink Dagger for cyclone combos",
-        true
-    )
-    apply_icon(ui.dependencies.cyclone_requires_blink, get_item_icon("eul") or get_item_icon("wind_waker"))
-end
-
 for index, def in ipairs(ITEM_DEFINITIONS) do
     ITEM_BY_ID[def.id] = def
     local section = section_groups[def.category or "defensive"] or section_groups.defensive
@@ -651,30 +575,28 @@ end
 
 local function ability_is_valid(hero, ability)
     if not ability then
-        return false, "ability not found"
+        return false
     end
     if Ability.IsPassive(ability) then
-        return false, "ability is passive"
+        return false
     end
     if Ability.IsHidden(ability) then
-        return false, "ability is hidden"
+        return false
     end
     if Ability.GetOwner(ability) ~= hero then
-        return false, "ability owner mismatch"
+        return false
     end
     if not Ability.IsActivated(ability) then
-        return false, "ability not activated"
+        return false
     end
     if not Ability.IsReady(ability) then
-        return false, "ability on cooldown"
+        return false
     end
     if not Ability.IsCastable(ability, NPC.GetMana(hero)) then
-        return false, "not enough mana"
+        return false
     end
-    return true, nil
+    return true
 end
-
-local is_channeling_ability = NPC.IsChannelingAbility or NPC.IsChannellingAbility
 
 local function item_has_charges(ability)
     if not ability then
@@ -760,21 +682,21 @@ end
 
 local function can_cast_now(def, hero, ability, detection_enemies)
     if def.modifier and NPC.HasModifier(hero, def.modifier) then
-        return false, "modifier already active"
+        return false
     end
     if def.requires_charges and not item_has_charges(ability) then
-        return false, "no charges"
+        return false
     end
     if def.active_modifier and NPC.HasModifier(hero, def.active_modifier) then
-        return false, "active effect in progress"
+        return false
     end
     if def.enemy_toggle then
         local toggle = ui.items[def.id].requires_enemy
         if toggle and toggle:Get() and (#detection_enemies == 0) then
-            return false, "no nearby enemies"
+            return false
         end
     end
-    return true, nil
+    return true
 end
 
 local function build_priority_queue()
@@ -805,10 +727,6 @@ end
 
 local function has_ready_eul_combo(hero, detection_enemies, current_health)
     current_health = current_health or health_percent(hero)
-    local require_blink = true
-    if ui.dependencies and ui.dependencies.cyclone_requires_blink then
-        require_blink = ui.dependencies.cyclone_requires_blink:Get()
-    end
     for _, def in ipairs(ITEM_DEFINITIONS) do
         if def.cast == "eul_combo" then
             local widgets = ui.items[def.id]
@@ -816,21 +734,8 @@ local function has_ready_eul_combo(hero, detection_enemies, current_health)
                 local threshold = widgets.threshold and widgets.threshold:Get()
                 if not threshold or current_health <= threshold then
                     local ability = find_item(hero, def.ability_names)
-                    if ability then
-                        local valid = ability_is_valid(hero, ability)
-                        if valid then
-                            local ready = can_cast_now(def, hero, ability, detection_enemies)
-                            if ready then
-                                if require_blink then
-                                    local blink_def, blink_ability = find_ready_blink(hero, detection_enemies)
-                                    if blink_def and blink_ability then
-                                        return true
-                                    end
-                                else
-                                    return true
-                                end
-                            end
-                        end
+                    if ability and ability_is_valid(hero, ability) and can_cast_now(def, hero, ability, detection_enemies) then
+                        return true
                     end
                 end
             end
@@ -866,15 +771,9 @@ local function find_ready_blink(hero, detection_enemies)
             local widgets = ui.items[def.id]
             if widgets and widgets.enabled:Get() then
                 local ability = find_item(hero, def.ability_names)
-                if ability then
-                    local valid = ability_is_valid(hero, ability)
-                    if valid then
-                        local ready = can_cast_now(def, hero, ability, detection_enemies)
-                        if ready then
-                            if not widgets.threshold or current_health <= widgets.threshold:Get() then
-                                return def, ability
-                            end
-                        end
+                if ability and ability_is_valid(hero, ability) and can_cast_now(def, hero, ability, detection_enemies) then
+                    if not widgets.threshold or current_health <= widgets.threshold:Get() then
+                        return def, ability
                     end
                 end
             end
@@ -883,19 +782,14 @@ local function find_ready_blink(hero, detection_enemies)
     return nil, nil
 end
 
-local function queue_blink_after_eul(eul_def, hero, detection_enemies, blink_def, blink_ability)
+local function queue_blink_after_eul(eul_def, hero, detection_enemies)
+    local blink_def, blink_ability = find_ready_blink(hero, detection_enemies)
     if not blink_def or not blink_ability then
-        debug_log(eul_def, "no blink available for cyclone follow-up")
-        blink_def, blink_ability = find_ready_blink(hero, detection_enemies)
-    end
-    if not blink_def or not blink_ability then
-        debug_log(eul_def, "blink search failed for cyclone follow-up")
         return false
     end
     local blink_distance = blink_def.blink_range or 1200
     local enemy = find_closest_enemy(hero, math.max(ui.enemy_range:Get() or 0, blink_distance))
     if not enemy then
-        debug_log(blink_def, "no enemy found for cyclone follow-up blink")
         return false
     end
     local escape_position = compute_escape_position(hero, enemy, blink_distance)
@@ -908,17 +802,14 @@ local function queue_blink_after_eul(eul_def, hero, detection_enemies, blink_def
         wait_modifier = eul_def and eul_def.modifier or "modifier_eul_cyclone",
         expire_time = GameRules.GetGameTime() + 3.5,
     }
-    debug_log(blink_def, string.format("queued blink after cyclone (%.0f units)", blink_distance))
     return true
 end
 
 local function queue_force_escape(def, hero, ability, closest_enemy)
     if pending_escapes[def.id] then
-        debug_log(def, "escape already queued")
         return true
     end
     if def.active_modifier and NPC.HasModifier(hero, def.active_modifier) then
-        debug_log(def, "escape active modifier present")
         return false
     end
     local distance = def.escape_distance or 600
@@ -946,7 +837,6 @@ local function queue_force_escape(def, hero, ability, closest_enemy)
         execute_time = GameRules.GetGameTime() + delay,
         threshold_widget = ui.items[def.id].threshold,
     }
-    debug_log(def, string.format("queued escape (delay %.0f ms)", delay * 1000))
     return true
 end
 
@@ -957,17 +847,14 @@ local function process_pending_escapes(hero, detection_enemies)
             pending_escapes[def_id] = nil
         else
             if not entry.ability or Ability.GetOwner(entry.ability) ~= hero then
-                debug_log(def, "pending escape ability missing or owner changed")
                 pending_escapes[def_id] = nil
             else
                 local threshold = entry.threshold_widget and entry.threshold_widget:Get() or def.threshold_default or 0
                 if health_percent(hero) > threshold then
-                    debug_log(def, "cancelled pending escape (health above threshold)")
                     pending_escapes[def_id] = nil
                 elseif def.enemy_toggle then
                     local toggle = ui.items[def.id].requires_enemy
                     if toggle and toggle:Get() and (#detection_enemies == 0) then
-                        debug_log(def, "cancelled pending escape (no enemies)")
                         pending_escapes[def_id] = nil
                     end
                 end
@@ -982,15 +869,11 @@ local function process_pending_escapes(hero, detection_enemies)
             pending_escapes[def_id] = nil
         else
             if current_time >= entry.execute_time then
-                if is_channeling_ability and is_channeling_ability(hero) then
+                if NPC.IsChannellingAbility(hero) then
                     entry.execute_time = current_time + 0.05
                 else
-                    local valid, reason = ability_is_valid(hero, entry.ability)
-                    if valid then
+                    if ability_is_valid(hero, entry.ability) then
                         Ability.CastTarget(entry.ability, hero)
-                        debug_log(def, "cast queued escape")
-                    else
-                        debug_log(def, reason or "queued escape ability invalid")
                     end
                     pending_escapes[def_id] = nil
                 end
@@ -1025,23 +908,18 @@ local function process_pending_eul_blink(hero, detection_enemies)
         end
         return
     end
-    if is_channeling_ability and is_channeling_ability(hero) then
+    if NPC.IsChannellingAbility(hero) then
         return
     end
     if not entry.ability or Ability.GetOwner(entry.ability) ~= hero then
-        debug_log(blink_def, "blink ability missing for cyclone follow-up")
         pending_eul_blink = nil
         return
     end
-    local valid, reason = ability_is_valid(hero, entry.ability)
-    if not valid then
-        debug_log(blink_def, reason or "blink invalid for cyclone follow-up")
+    if not ability_is_valid(hero, entry.ability) then
         pending_eul_blink = nil
         return
     end
-    local ready, block_reason = can_cast_now(blink_def, hero, entry.ability, detection_enemies)
-    if not ready then
-        debug_log(blink_def, block_reason or "blink blocked for cyclone follow-up")
+    if not can_cast_now(blink_def, hero, entry.ability, detection_enemies) then
         pending_eul_blink = nil
         return
     end
@@ -1054,171 +932,112 @@ local function process_pending_eul_blink(hero, detection_enemies)
         cast_position = compute_escape_position(hero, enemy, entry.distance or blink_def.blink_range or 1200)
     end
     if not cast_position then
-        debug_log(blink_def, "no escape position for cyclone follow-up")
         pending_eul_blink = nil
         return
     end
     Ability.CastPosition(entry.ability, cast_position)
-    debug_log(blink_def, "cast blink after cyclone")
     pending_eul_blink = nil
 end
 --#endregion
 
 --#region Casting logic
 local function cast_eul_combo(def, hero, ability, detection_enemies)
-    local require_blink = true
-    if ui.dependencies and ui.dependencies.cyclone_requires_blink then
-        require_blink = ui.dependencies.cyclone_requires_blink:Get()
-    end
-
-    local blink_def, blink_ability
-    if require_blink then
-        blink_def, blink_ability = find_ready_blink(hero, detection_enemies)
-        if not blink_def or not blink_ability then
-            debug_log(def, "waiting for blink before cyclone")
-            return false
-        end
-    end
-
     Ability.CastTarget(ability, hero)
-    debug_log(def, "cast cyclone combo")
-    if not queue_blink_after_eul(def, hero, detection_enemies, blink_def, blink_ability) then
-        debug_log(def, "failed to queue blink after cyclone")
-    end
+    queue_blink_after_eul(def, hero, detection_enemies)
     return true
 end
 
 local function cast_meteor_combo(def, hero, ability, detection_enemies)
-    local require_glimmer = true
-    if ui.dependencies and ui.dependencies.meteor_requires_glimmer then
-        require_glimmer = ui.dependencies.meteor_requires_glimmer:Get()
-    end
-
     local glimmer_def = ITEM_BY_ID.glimmer
-    local glimmer_widgets = glimmer_def and ui.items[glimmer_def.id] or nil
-    local casted_glimmer = false
-
-    if glimmer_def and glimmer_widgets and glimmer_widgets.enabled:Get() then
-        local glimmer_threshold = glimmer_widgets.threshold and glimmer_widgets.threshold:Get()
-            or glimmer_def.threshold_default
-            or 50
-        if health_percent(hero) <= glimmer_threshold then
-            local glimmer = find_item(hero, glimmer_def.ability_names)
-            if glimmer then
-                local valid, reason = ability_is_valid(hero, glimmer)
-                if valid then
-                    local ready, block = can_cast_now(glimmer_def, hero, glimmer, detection_enemies)
-                    if ready then
-                        Ability.CastTarget(glimmer, hero)
-                        debug_log(glimmer_def, "cast glimmer for meteor combo")
-                        casted_glimmer = true
-                    else
-                        debug_log(glimmer_def, block or "glimmer blocked before meteor")
-                    end
-                else
-                    debug_log(glimmer_def, reason or "glimmer invalid before meteor")
-                end
-            else
-                debug_log(glimmer_def, "glimmer not found for meteor combo")
-            end
-        end
+    if not glimmer_def then
+        return false
+    end
+    local glimmer_widgets = ui.items[glimmer_def.id]
+    if not glimmer_widgets or not glimmer_widgets.enabled:Get() then
+        return false
     end
 
-    if require_glimmer then
-        if not glimmer_def then
-            debug_log(def, "meteor combo requires glimmer but definition missing")
+    local glimmer_threshold = glimmer_widgets.threshold and glimmer_widgets.threshold:Get() or glimmer_def.threshold_default or 50
+    if health_percent(hero) > glimmer_threshold then
+        return false
+    end
+
+    local casted_glimmer = false
+    local glimmer = find_item(hero, glimmer_def.ability_names)
+    if glimmer and ability_is_valid(hero, glimmer) and can_cast_now(glimmer_def, hero, glimmer, detection_enemies) then
+        Ability.CastTarget(glimmer, hero)
+        casted_glimmer = true
+    end
+
+    if not casted_glimmer then
+        if not (glimmer_def.modifier and NPC.HasModifier(hero, glimmer_def.modifier)) then
             return false
-        end
-        if not casted_glimmer then
-            local has_glimmer = glimmer_def.modifier and NPC.HasModifier(hero, glimmer_def.modifier)
-            if not has_glimmer then
-                debug_log(def, "meteor combo waiting for glimmer effect")
-                return false
-            end
         end
     end
 
     local target = find_enemy_for_ability(hero, ability, def)
     if not target then
-        debug_log(def, "no enemy found for meteor combo")
         return false
     end
     local enemy_pos = Entity.GetAbsOrigin(target)
     Ability.CastPosition(ability, enemy_pos)
-    debug_log(def, "cast meteor combo")
     return true
 end
 
 local function cast_item(def, hero, detection_enemies)
     local ability = find_item(hero, def.ability_names)
     if not ability then
-        debug_log(def, "item not present in inventory")
         return false
     end
-    local valid, reason = ability_is_valid(hero, ability)
-    if not valid then
-        debug_log(def, reason or "ability not ready")
+    if not ability_is_valid(hero, ability) then
         return false
     end
-    local ready, block_reason = can_cast_now(def, hero, ability, detection_enemies)
-    if not ready then
-        debug_log(def, block_reason or "cannot cast due to state")
+    if not can_cast_now(def, hero, ability, detection_enemies) then
         return false
     end
 
     if def.cast == "target_self" then
         Ability.CastTarget(ability, hero)
-        debug_log(def, "cast on self")
         return true
     elseif def.cast == "no_target" then
         Ability.CastNoTarget(ability)
-        debug_log(def, "cast no target ability")
         return true
     elseif def.cast == "target_enemy" then
         local enemy = find_enemy_for_ability(hero, ability, def)
         if not enemy then
-            debug_log(def, "no enemy in range")
             return false
         end
         Ability.CastTarget(ability, enemy)
-        debug_log(def, string.format("cast on %s", NPC.GetUnitName(enemy) or "enemy"))
         return true
     elseif def.cast == "position_enemy" then
         local enemy = find_enemy_for_ability(hero, ability, def)
         if not enemy then
-            debug_log(def, "no enemy position available")
             return false
         end
         local enemy_pos = Entity.GetAbsOrigin(enemy)
         Ability.CastPosition(ability, enemy_pos)
-        debug_log(def, "cast at enemy position")
         return true
     elseif def.cast == "blink_escape" then
         if pending_eul_blink then
-            debug_log(def, "blink escape blocked (pending cyclone combo)")
             return false
         end
         local current_health = health_percent(hero)
         if has_ready_eul_combo(hero, detection_enemies, current_health) then
-            debug_log(def, "blink escape skipped (cyclone combo ready)")
             return false
         end
         local search_radius = math.max(ui.enemy_range:Get() or 0, def.blink_range or 1200)
         local enemy = find_closest_enemy(hero, search_radius)
         if not enemy then
-            debug_log(def, "no enemy found for blink escape")
             return false
         end
         local blink_distance = def.blink_range or 1200
         local escape_position = compute_escape_position(hero, enemy, blink_distance)
         Ability.CastPosition(ability, escape_position)
-        debug_log(def, "cast blink escape")
         return true
     elseif def.cast == "force_escape" then
         local search_radius = math.max(ui.enemy_range:Get() or 0, def.escape_distance or 600)
         local enemy = find_closest_enemy(hero, search_radius)
         if not enemy then
-            debug_log(def, "no enemy found for force escape")
             return false
         end
         return queue_force_escape(def, hero, ability, enemy)
@@ -1227,21 +1046,18 @@ local function cast_item(def, hero, detection_enemies)
     elseif def.cast == "meteor_combo" then
         return cast_meteor_combo(def, hero, ability, detection_enemies)
     end
-    debug_log(def, "unknown cast type")
     return false
 end
 --#endregion
 
 function auto_defender.OnUpdate()
     if not ui.enable:Get() then
-        debug_log(nil, "automation disabled")
         clear_pending()
         return
     end
 
     local hero = get_local_hero()
     if not hero then
-        debug_log(nil, "local hero unavailable")
         clear_pending()
         return
     end
@@ -1252,8 +1068,7 @@ function auto_defender.OnUpdate()
     process_pending_escapes(hero, detection_enemies)
     process_pending_eul_blink(hero, detection_enemies)
 
-    if is_channeling_ability and is_channeling_ability(hero) then
-        debug_log(nil, "skipping casts while channeling")
+    if NPC.IsChannellingAbility(hero) then
         -- allow only items that explicitly opt-in
         local queue = build_priority_queue()
         for _, item in ipairs(queue) do
@@ -1263,11 +1078,7 @@ function auto_defender.OnUpdate()
                 if widgets then
                     local should_cast = true
                     if widgets.threshold then
-                        local threshold_value = widgets.threshold:Get()
-                        should_cast = current_health <= threshold_value
-                        if not should_cast then
-                            debug_log(def, string.format("health %.1f%% above threshold %d%%", current_health, threshold_value))
-                        end
+                        should_cast = current_health <= widgets.threshold:Get()
                     end
                     if should_cast then
                         cast_item(def, hero, detection_enemies)
@@ -1285,11 +1096,7 @@ function auto_defender.OnUpdate()
         if widgets then
             local should_cast = true
             if widgets.threshold then
-                local threshold_value = widgets.threshold:Get()
-                should_cast = current_health <= threshold_value
-                if not should_cast then
-                    debug_log(def, string.format("health %.1f%% above threshold %d%%", current_health, threshold_value))
-                end
+                should_cast = current_health <= widgets.threshold:Get()
             end
             if should_cast then
                 cast_item(def, hero, detection_enemies)
@@ -1303,3 +1110,4 @@ function auto_defender.OnGameEnd()
 end
 
 return auto_defender
+
