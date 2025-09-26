@@ -610,7 +610,7 @@ local function item_has_charges(ability)
 end
 
 local function collect_enemies(hero, radius)
-    local enemies = Entity.GetHeroesInRadius(hero, radius, Enum.TeamType.TEAM_ENEMY, true, true)
+    local enemies = NPC.GetHeroesInRadius(hero, radius, Enum.TeamType.TEAM_ENEMY)
     local result = {}
     if not enemies then
         return result
