@@ -557,6 +557,11 @@ local METEOR_HAMMER_DEFINITION = {
     range = 900,
 }
 
+local METEOR_COMBO_READY_DELAY = 0.05
+local METEOR_COMBO_MAX_DURATION = 0.6
+local meteor_combo_ready_time = 0.0
+local meteor_combo_expire_time = 0.0
+
 local priority_defaults = {
     glimmer = true,
     ghost = true,
@@ -1079,6 +1084,20 @@ local function is_meteor_combo_enabled()
     return value ~= 0
 end
 
+local function clear_meteor_combo_schedule()
+    meteor_combo_ready_time = 0.0
+    meteor_combo_expire_time = 0.0
+end
+
+local function schedule_meteor_combo(game_time)
+    if not is_meteor_combo_enabled() then
+        return
+    end
+
+    meteor_combo_ready_time = game_time + METEOR_COMBO_READY_DELAY
+    meteor_combo_expire_time = game_time + METEOR_COMBO_MAX_DURATION
+end
+
 local function update_scale_from_slider()
     local slider = ui.scale
     if not slider or type(slider.Get) ~= "function" then
@@ -1343,6 +1362,38 @@ local function cast_meteor_combo(hero, game_time)
     return true
 end
 
+local function update_meteor_combo(hero, game_time)
+    if meteor_combo_ready_time <= 0 then
+        return
+    end
+
+    if not is_meteor_combo_enabled() then
+        clear_meteor_combo_schedule()
+        return
+    end
+
+    if not hero or not Entity.IsAlive(hero) then
+        clear_meteor_combo_schedule()
+        return
+    end
+
+    if game_time < meteor_combo_ready_time then
+        return
+    end
+
+    if cast_meteor_combo(hero, game_time) then
+        clear_meteor_combo_schedule()
+        return
+    end
+
+    if meteor_combo_expire_time > 0 and game_time >= meteor_combo_expire_time then
+        clear_meteor_combo_schedule()
+        return
+    end
+
+    meteor_combo_ready_time = game_time + METEOR_COMBO_READY_DELAY
+end
+
 local function normalize_flat_vector(vector)
     if not vector then
         return nil
@@ -1485,7 +1536,7 @@ local function cast_item(hero, item_key, game_time)
     mark_cast(item_key, game_time)
 
     if item_key == "glimmer" or item_key == "bkb" then
-        cast_meteor_combo(hero, game_time)
+        schedule_meteor_combo(game_time)
     end
 
     return CAST_RESULT_CAST
@@ -1497,22 +1548,26 @@ function auto_defender.OnUpdate()
     if not Engine.IsInGame() then
         last_cast_times = {}
         next_cast_available_time = 0.0
-        return
-    end
-
-    if not ui.enable:Get() then
-        next_cast_available_time = 0.0
+        clear_meteor_combo_schedule()
         return
     end
 
     local hero = Heroes.GetLocal()
     if not hero or NPC.IsIllusion(hero) or not Entity.IsAlive(hero) or Entity.IsDormant(hero) then
         next_cast_available_time = 0.0
+        clear_meteor_combo_schedule()
+        return
+    end
+
+    if not ui.enable:Get() then
+        next_cast_available_time = 0.0
+        clear_meteor_combo_schedule()
         return
     end
 
     local max_health = Entity.GetMaxHealth(hero)
     if max_health <= 0 then
+        clear_meteor_combo_schedule()
         return
     end
 
@@ -1520,6 +1575,8 @@ function auto_defender.OnUpdate()
     local health_percent = (current_health / max_health) * 100.0
 
     local game_time = GameRules.GetGameTime()
+
+    update_meteor_combo(hero, game_time)
 
     if next_cast_available_time > game_time then
         return
@@ -1556,6 +1613,7 @@ end
 function auto_defender.OnGameEnd()
     last_cast_times = {}
     next_cast_available_time = 0.0
+    clear_meteor_combo_schedule()
 end
 
 return auto_defender
