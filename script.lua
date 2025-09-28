@@ -534,6 +534,14 @@ local function normalize_flat_vector(vector)
     return vector
 end
 
+local function is_channelling(hero)
+    if not hero or not NPC or not NPC.IsChannellingAbility then
+        return false
+    end
+
+    return NPC.IsChannellingAbility(hero)
+end
+
 local function face_direction(hero, direction)
     if not hero or not direction then
         return
@@ -541,6 +549,10 @@ local function face_direction(hero, direction)
 
     local hero_pos = Entity.GetAbsOrigin(hero)
     if not hero_pos then
+        return
+    end
+
+    if is_channelling(hero) then
         return
     end
 
@@ -713,18 +725,24 @@ local function cast_item(hero, item_key, game_time)
                 direction = direction,
                 enemy = enemy,
             }
-            face_direction(hero, direction)
+            if not is_channelling(hero) then
+                face_direction(hero, direction)
+            end
             return false
         end
 
         pending.direction = direction
 
         if game_time < pending.ready_time then
-            face_direction(hero, pending.direction)
+            if not is_channelling(hero) then
+                face_direction(hero, pending.direction)
+            end
             return false
         end
 
-        face_direction(hero, pending.direction)
+        if not is_channelling(hero) then
+            face_direction(hero, pending.direction)
+        end
         Ability.CastTarget(item, hero)
         clear_pending_escape(item_key)
     elseif definition.type == "escape_position" then
