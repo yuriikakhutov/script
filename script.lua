@@ -377,6 +377,8 @@ local ITEM_DEFINITIONS = {
         display_name = "Glimmer Cape",
         type = "target_self",
         modifier = "modifier_item_glimmer_cape_fade",
+        requires_enemy = true,
+        search_range = 1200,
     },
     ghost = {
         item_name = "item_ghost",
