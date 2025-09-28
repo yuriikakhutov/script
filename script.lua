@@ -14,13 +14,20 @@ if type(tab.Gear) == "function" then
     end
 end
 
-local GEAR_WIDGET_SCALE = 0.5
-local NON_COMPACT_WIDGET_SCALE = 0.45
-local base_widget_scale = GEAR_WIDGET_SCALE
+local DEFAULT_GEAR_WIDGET_SCALE = 0.35
+local DEFAULT_NON_COMPACT_WIDGET_SCALE = 0.3
+local MIN_WIDGET_SCALE = 0.2
+local MAX_WIDGET_SCALE = 1.0
+
+local base_widget_scale = DEFAULT_GEAR_WIDGET_SCALE
 
 if settings_root == tab then
-    base_widget_scale = NON_COMPACT_WIDGET_SCALE
+    base_widget_scale = DEFAULT_NON_COMPACT_WIDGET_SCALE
 end
+
+local current_widget_scale = base_widget_scale
+
+local scaled_widgets = setmetatable({}, { __mode = "k" })
 
 local function call_widget_method(widget, method_name, ...)
     if not widget or type(method_name) ~= "string" then
@@ -36,12 +43,28 @@ local function call_widget_method(widget, method_name, ...)
     return ok and true or false
 end
 
-local function apply_compact_style(widget, scale)
+local function clamp_widget_scale(scale)
+    if type(scale) ~= "number" then
+        return current_widget_scale
+    end
+
+    if scale < MIN_WIDGET_SCALE then
+        return MIN_WIDGET_SCALE
+    end
+
+    if scale > MAX_WIDGET_SCALE then
+        return MAX_WIDGET_SCALE
+    end
+
+    return scale
+end
+
+local function set_widget_scale(widget, scale)
     if not widget then
         return
     end
 
-    local effective_scale = scale or base_widget_scale or GEAR_WIDGET_SCALE
+    local effective_scale = clamp_widget_scale(scale or current_widget_scale)
 
     if call_widget_method(widget, "SetScale", effective_scale) then
         return
@@ -70,7 +93,34 @@ local function apply_compact_style(widget, scale)
     call_widget_method(widget, "SetItemSizeMultiplier", effective_scale)
 end
 
-apply_compact_style(tab, base_widget_scale)
+local function apply_compact_style(widget, scale)
+    if not widget then
+        return
+    end
+
+    scaled_widgets[widget] = true
+    set_widget_scale(widget, scale)
+end
+
+local function rescale_registered_widgets()
+    for widget in pairs(scaled_widgets) do
+        set_widget_scale(widget, current_widget_scale)
+    end
+end
+
+local function set_current_widget_scale(scale)
+    local clamped = clamp_widget_scale(scale)
+
+    if math.abs(clamped - current_widget_scale) < 0.0001 then
+        return
+    end
+
+    current_widget_scale = clamped
+    base_widget_scale = clamped
+
+    rescale_registered_widgets()
+end
+apply_compact_style(tab, current_widget_scale)
 apply_compact_style(settings_root)
 
 local function add_section_label(container, text)
@@ -140,12 +190,26 @@ local priority_group = resolve_container("Item Priority", using_gear and true, 1
 local threshold_group = resolve_container("Item Thresholds", using_gear and true, 2)
 local enemy_range_group = resolve_container("Enemy Range", using_gear and true, 3)
 
+local MIN_WIDGET_SCALE_PERCENT = math.floor(MIN_WIDGET_SCALE * 100 + 0.5)
+local MAX_WIDGET_SCALE_PERCENT = math.floor(MAX_WIDGET_SCALE * 100 + 0.5)
+local last_scale_percent = math.floor(current_widget_scale * 100 + 0.5)
+
 local ui = {}
 ui.enable = activation_group:Switch("Enable", true)
 ui.meteor_combo = activation_group:Switch("Meteor Hammer Combo", true)
+ui.scale = activation_group:Slider(
+    "Interface Scale (%)",
+    MIN_WIDGET_SCALE_PERCENT,
+    MAX_WIDGET_SCALE_PERCENT,
+    last_scale_percent,
+    function(value)
+        return string.format("%d%%", value)
+    end
+)
 
 apply_compact_style(ui.enable)
 apply_compact_style(ui.meteor_combo)
+apply_compact_style(ui.scale)
 if activation_group and activation_group ~= settings_root then
     apply_compact_style(activation_group)
 end
@@ -636,6 +700,195 @@ apply_compact_style(priority_delay_slider)
 
 local DEFAULT_SEARCH_RANGE = 1200
 
+local function parse_numeric_value(value)
+    if type(value) == "number" then
+        return value
+    end
+
+    if type(value) == "string" then
+        local numeric = tonumber(value)
+        if numeric then
+            return numeric
+        end
+
+        local first_number = value:match("%-?%d+")
+        if first_number then
+            return tonumber(first_number)
+        end
+    end
+
+    return nil
+end
+
+local database_range_cache = setmetatable({}, { __mode = "k" })
+
+local function fetch_database_entry(definition)
+    if type(Info) ~= "table" or not definition then
+        return nil
+    end
+
+    local source = definition.item_name
+
+    if not source and type(definition.item_names) == "table" then
+        source = definition.item_names[1]
+    end
+
+    if type(source) ~= "string" or source == "" then
+        return nil
+    end
+
+    local fetchers = {}
+
+    local function add_fetcher(fn)
+        if type(fn) == "function" then
+            fetchers[#fetchers + 1] = fn
+        end
+    end
+
+    add_fetcher(Info.GetAbility)
+    add_fetcher(Info.GetItem)
+    add_fetcher(Info.Get)
+
+    local ability_table = Info.Ability
+    if type(ability_table) == "table" then
+        add_fetcher(ability_table.GetAbility)
+        add_fetcher(ability_table.Get)
+        add_fetcher(ability_table.GetInfo)
+    end
+
+    local item_table = Info.Item or Info.Items
+    if type(item_table) == "table" then
+        add_fetcher(item_table.GetItem)
+        add_fetcher(item_table.Get)
+        add_fetcher(item_table.GetInfo)
+    end
+
+    for _, fetcher in ipairs(fetchers) do
+        local ok, result = pcall(fetcher, source)
+        if ok and type(result) == "table" then
+            return result
+        end
+    end
+
+    return nil
+end
+
+local function extract_numeric_field(container, keys)
+    if type(container) ~= "table" then
+        return nil
+    end
+
+    for i = 1, #keys do
+        local numeric = parse_numeric_value(container[keys[i]])
+        if numeric and numeric > 0 then
+            return numeric
+        end
+    end
+
+    return nil
+end
+
+local function scan_table_for_numeric_value(value)
+    if type(value) == "table" then
+        for _, entry in pairs(value) do
+            local numeric = parse_numeric_value(entry)
+            if numeric and numeric > 0 then
+                return numeric
+            end
+
+            if type(entry) == "table" then
+                local nested = scan_table_for_numeric_value(entry)
+                if nested and nested > 0 then
+                    return nested
+                end
+            end
+        end
+    end
+
+    return nil
+end
+
+local function resolve_database_range(definition)
+    if not definition then
+        return nil
+    end
+
+    local cached = database_range_cache[definition]
+    if cached ~= nil then
+        if cached == false then
+            return nil
+        end
+
+        return cached
+    end
+
+    local data = fetch_database_entry(definition)
+    if type(data) ~= "table" then
+        database_range_cache[definition] = false
+        return nil
+    end
+
+    local numeric = extract_numeric_field(
+        data,
+        {
+            "AbilityCastRange",
+            "CastRange",
+            "Range",
+            "MaxRange",
+            "MinRange",
+        }
+    )
+
+    if numeric and numeric > 0 then
+        database_range_cache[definition] = numeric
+        return numeric
+    end
+
+    local special_tables = {
+        data.AbilitySpecial,
+        data.AbilityValues,
+        data.SpecialValues,
+        data.special,
+        data.values,
+    }
+
+    for _, container in ipairs(special_tables) do
+        if type(container) == "table" then
+            for _, entry in pairs(container) do
+                local candidate = extract_numeric_field(
+                    entry,
+                    {
+                        "cast_range",
+                        "cast_range_tooltip",
+                        "range",
+                        "Range",
+                        "radius",
+                        "Radius",
+                        "value",
+                        "value1",
+                        "value2",
+                        "value3",
+                    }
+                )
+
+                if candidate and candidate > 0 then
+                    database_range_cache[definition] = candidate
+                    return candidate
+                end
+
+                local nested = scan_table_for_numeric_value(entry)
+                if nested and nested > 0 then
+                    database_range_cache[definition] = nested
+                    return nested
+                end
+            end
+        end
+    end
+
+    database_range_cache[definition] = false
+    return nil
+end
+
 local function refresh_priority_order()
     local ordered = {}
 
@@ -778,7 +1031,7 @@ for _, item in ipairs(priority_items) do
             or definition.requires_enemy
 
         if needs_enemy_range then
-            local default_range = definition.range or definition.search_range or DEFAULT_SEARCH_RANGE
+            local default_range = definition.range or definition.search_range or resolve_database_range(definition)
             if not default_range or default_range <= 0 then
                 default_range = DEFAULT_SEARCH_RANGE
             end
@@ -824,6 +1077,32 @@ local function is_meteor_combo_enabled()
     end
 
     return value ~= 0
+end
+
+local function update_scale_from_slider()
+    local slider = ui.scale
+    if not slider or type(slider.Get) ~= "function" then
+        return
+    end
+
+    local value = slider:Get()
+    value = tonumber(value)
+    if not value then
+        return
+    end
+
+    if value < MIN_WIDGET_SCALE_PERCENT then
+        value = MIN_WIDGET_SCALE_PERCENT
+    elseif value > MAX_WIDGET_SCALE_PERCENT then
+        value = MAX_WIDGET_SCALE_PERCENT
+    end
+
+    if math.abs(value - last_scale_percent) < 0.5 then
+        return
+    end
+
+    last_scale_percent = value
+    set_current_widget_scale(value / 100.0)
 end
 
 local function can_use_item(hero)
@@ -909,7 +1188,18 @@ local function get_effective_cast_range(hero, ability, definition)
     end
 
     if definition and definition.range then
-        range = math.max(range, definition.range)
+        if not range or range < definition.range then
+            range = definition.range
+        end
+    end
+
+    if definition and (not range or range <= 0) then
+        local database_range = resolve_database_range(definition)
+        if database_range and database_range > 0 then
+            if not range or range < database_range then
+                range = database_range
+            end
+        end
     end
 
     if range <= 0 then
@@ -1202,6 +1492,8 @@ local function cast_item(hero, item_key, game_time)
 end
 
 function auto_defender.OnUpdate()
+    update_scale_from_slider()
+
     if not Engine.IsInGame() then
         last_cast_times = {}
         next_cast_available_time = 0.0
