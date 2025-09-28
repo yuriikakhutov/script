@@ -107,6 +107,8 @@ local ITEM_DEFINITIONS = {
         display_name = "Mjollnir",
         type = "no_target",
         modifier = "modifier_item_mjollnir_shield",
+        requires_enemy = true,
+        search_range = 1200,
     },
     eul = {
         item_name = "item_cyclone",
