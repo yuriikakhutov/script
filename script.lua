@@ -387,10 +387,128 @@ local priority_widget = priority_group:MultiSelect("Items", priority_items, true
 priority_widget:DragAllowed(true)
 priority_widget:ToolTip("Drag to reorder priority. Enable items you want to use.")
 
+local priority_order = {}
 local item_thresholds = {}
 local item_enemy_ranges = {}
 
 local DEFAULT_SEARCH_RANGE = 1200
+
+local function refresh_priority_order()
+    local ordered = {}
+
+    if priority_widget and priority_widget.List then
+        local list = priority_widget:List()
+
+        if type(list) == "table" then
+            local count = #list
+            if count and count > 0 then
+                for i = 1, count do
+                    local key = list[i]
+                    if type(key) == "string" then
+                        ordered[#ordered + 1] = key
+                    end
+                end
+            end
+
+            if #ordered == 0 then
+                local indexed = {}
+
+                for key, value in pairs(list) do
+                    if type(key) == "number" then
+                        indexed[#indexed + 1] = { index = key, value = value }
+                    end
+                end
+
+                if #indexed > 0 then
+                    table.sort(indexed, function(a, b)
+                        return a.index < b.index
+                    end)
+
+                    for _, entry in ipairs(indexed) do
+                        if type(entry.value) == "string" then
+                            ordered[#ordered + 1] = entry.value
+                        elseif type(entry.value) == "table" then
+                            local first = entry.value[1]
+                            if type(first) == "string" then
+                                ordered[#ordered + 1] = first
+                            elseif type(entry.value.key) == "string" then
+                                ordered[#ordered + 1] = entry.value.key
+                            end
+                        end
+                    end
+                end
+            end
+
+            if #ordered == 0 then
+                local seen = {}
+
+                for _, item in ipairs(priority_items) do
+                    seen[item[1]] = true
+                end
+
+                for _, value in pairs(list) do
+                    if type(value) == "string" and seen[value] then
+                        ordered[#ordered + 1] = value
+                        seen[value] = nil
+                    elseif type(value) == "table" then
+                        local key = value.key or value[1]
+                        if type(key) == "string" and seen[key] then
+                            ordered[#ordered + 1] = key
+                            seen[key] = nil
+                        end
+                    end
+                end
+
+                for _, item in ipairs(priority_items) do
+                    local key = item[1]
+                    if seen[key] then
+                        ordered[#ordered + 1] = key
+                    end
+                end
+            end
+        end
+    end
+
+    if #ordered == 0 then
+        for _, item in ipairs(priority_items) do
+            ordered[#ordered + 1] = item[1]
+        end
+    end
+
+    priority_order = ordered
+end
+
+refresh_priority_order()
+
+if priority_widget then
+    if priority_widget.RegisterCallback then
+        priority_widget:RegisterCallback(function()
+            refresh_priority_order()
+        end)
+    end
+
+    if priority_widget.RegisterDragCallback then
+        priority_widget:RegisterDragCallback(function(order)
+            if type(order) == "table" and #order > 0 then
+                local copied = {}
+
+                for i = 1, #order do
+                    local key = order[i]
+                    if type(key) == "string" then
+                        copied[#copied + 1] = key
+                    end
+                end
+
+                if #copied > 0 then
+                    priority_order = copied
+                    return
+                end
+            end
+
+            refresh_priority_order()
+        end)
+    end
+end
 
 for _, item in ipairs(priority_items) do
     local key = item[1]
@@ -470,12 +588,27 @@ local function mark_cast(item_id, game_time)
 end
 
 local function get_enabled_items()
-    local ordered = priority_widget:List()
-    local enabled = {}
+    refresh_priority_order()
 
-    for _, key in ipairs(ordered) do
-        if priority_widget:Get(key) then
-            enabled[#enabled + 1] = key
+    local enabled = {}
+    local seen = {}
+
+    for _, key in ipairs(priority_order) do
+        if not seen[key] then
+            seen[key] = true
+            if priority_widget:Get(key) then
+                enabled[#enabled + 1] = key
+            end
+        end
+    end
+
+    for _, item in ipairs(priority_items) do
+        local key = item[1]
+        if not seen[key] then
+            seen[key] = true
+            if priority_widget:Get(key) then
+                enabled[#enabled + 1] = key
+            end
         end
     end
 
@@ -1113,6 +1246,7 @@ local function cast_item(hero, item_key, game_time)
         local cast_position = hero_pos + direction * distance
         cast_position.z = hero_pos.z
 
+        activate_escape_block(hero, game_time, ESCAPE_POST_CAST_BLOCK_DURATION)
         Ability.CastPosition(item, cast_position, false, false, false, ESCAPE_ORDER_IDENTIFIER)
     else
         return false
