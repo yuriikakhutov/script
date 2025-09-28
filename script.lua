@@ -387,6 +387,16 @@ local priority_widget = priority_group:MultiSelect("Items", priority_items, true
 priority_widget:DragAllowed(true)
 priority_widget:ToolTip("Drag to reorder priority. Enable items you want to use.")
 
+local priority_delay_slider = priority_group:Slider(
+    "Delay After Successful Cast",
+    0,
+    2000,
+    300,
+    function(value)
+        return string.format("%.2fs", value / 1000.0)
+    end
+)
+
 local priority_order = {}
 local item_thresholds = {}
 local item_enemy_ranges = {}
@@ -552,6 +562,7 @@ end
 
 local CAST_COOLDOWN = 0.2
 local last_cast_times = {}
+local priority_delay_until = 0.0
 
 local CONTROL_BLOCKERS = {
     Enum.ModifierState.MODIFIER_STATE_STUNNED,
@@ -899,15 +910,18 @@ end
 function auto_defender.OnUpdate()
     if not Engine.IsInGame() then
         last_cast_times = {}
+        priority_delay_until = 0.0
         return
     end
 
     if not ui.enable:Get() then
+        priority_delay_until = 0.0
         return
     end
 
     local hero = Heroes.GetLocal()
     if not hero or NPC.IsIllusion(hero) or not Entity.IsAlive(hero) or Entity.IsDormant(hero) then
+        priority_delay_until = 0.0
         return
     end
 
@@ -920,6 +934,17 @@ function auto_defender.OnUpdate()
     local health_percent = (current_health / max_health) * 100.0
 
     local game_time = GameRules.GetGameTime()
+
+    if priority_delay_slider then
+        local delay_ms = priority_delay_slider:Get()
+        if delay_ms and delay_ms > 0 then
+            if priority_delay_until > game_time then
+                return
+            end
+        else
+            priority_delay_until = 0.0
+        end
+    end
     local items_to_use = get_enabled_items()
 
     if #items_to_use == 0 then
@@ -930,6 +955,14 @@ function auto_defender.OnUpdate()
         local threshold_slider = item_thresholds[key]
         if threshold_slider and health_percent <= threshold_slider:Get() then
             if cast_item(hero, key, game_time) then
+                if priority_delay_slider then
+                    local delay_ms = priority_delay_slider:Get()
+                    if delay_ms and delay_ms > 0 then
+                        priority_delay_until = game_time + (delay_ms / 1000.0)
+                    else
+                        priority_delay_until = 0.0
+                    end
+                end
                 break
             end
         end
@@ -938,6 +971,7 @@ end
 
 function auto_defender.OnGameEnd()
     last_cast_times = {}
+    priority_delay_until = 0.0
 end
 
 return auto_defender
