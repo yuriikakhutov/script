@@ -581,6 +581,49 @@ local function normalize_flat_vector(vector)
     return vector
 end
 
+local ESCAPE_FACING_DOT_THRESHOLD = 0.985
+
+local function get_forward_direction(hero)
+    if not hero or not Entity or not Entity.GetRotation then
+        return nil
+    end
+
+    local rotation = Entity.GetRotation(hero)
+    if not rotation or rotation.y == nil then
+        return nil
+    end
+
+    local yaw_radians = math.rad(rotation.y)
+    local facing_x = math.cos(yaw_radians)
+    local facing_y = math.sin(yaw_radians)
+
+    return {
+        x = facing_x,
+        y = facing_y,
+        z = 0,
+    }
+end
+
+local function is_facing_direction(hero, direction)
+    if not hero or not direction then
+        return false
+    end
+
+    local forward = get_forward_direction(hero)
+    if not forward then
+        return true
+    end
+
+    local dot = forward.x * direction.x + forward.y * direction.y
+    if dot > 1 then
+        dot = 1
+    elseif dot < -1 then
+        dot = -1
+    end
+
+    return dot >= ESCAPE_FACING_DOT_THRESHOLD
+end
+
 local function is_channelling(hero)
     if not hero or not NPC or not NPC.IsChannellingAbility then
         return false
@@ -648,21 +691,18 @@ local function get_escape_direction(hero, ability, definition, item_key)
         return nil, nil
     end
 
-    local direction = enemy_pos - hero_pos
+    local direction = hero_pos - enemy_pos
     direction = normalize_flat_vector(direction)
 
     if not direction then
         return nil, nil
     end
 
-    direction.x = -direction.x
-    direction.y = -direction.y
-    direction.z = 0
-
     return direction, enemy
 end
 
-local ESCAPE_TURN_DELAY = 0.2
+local ESCAPE_MIN_TURN_DELAY = 0.15
+local ESCAPE_TURN_RETRY_DELAY = 0.05
 local ESCAPE_PREP_BLOCK_DURATION = 0.45
 local ESCAPE_POST_CAST_BLOCK_DURATION = 0.6
 local ESCAPE_STOP_COOLDOWN = 0.05
@@ -883,11 +923,11 @@ local function cast_item(hero, item_key, game_time)
 
         if needs_new_escape(direction, enemy, pending) then
             pending_escape_casts[item_key] = {
-                ready_time = game_time + ESCAPE_TURN_DELAY,
+                ready_time = game_time + ESCAPE_MIN_TURN_DELAY,
                 direction = direction,
                 enemy = enemy,
             }
-            activate_escape_block(hero, game_time, ESCAPE_PREP_BLOCK_DURATION + ESCAPE_TURN_DELAY)
+            activate_escape_block(hero, game_time, ESCAPE_PREP_BLOCK_DURATION + ESCAPE_MIN_TURN_DELAY)
             if not is_channelling(hero) then
                 face_direction(hero, direction)
             end
@@ -895,9 +935,22 @@ local function cast_item(hero, item_key, game_time)
         end
 
         pending.direction = direction
+        pending.enemy = enemy
+        if not pending.ready_time then
+            pending.ready_time = game_time + ESCAPE_MIN_TURN_DELAY
+        end
         activate_escape_block(hero, game_time, ESCAPE_PREP_BLOCK_DURATION)
 
         if game_time < pending.ready_time then
+            if not is_channelling(hero) then
+                face_direction(hero, pending.direction)
+            end
+            return false
+        end
+
+        if not is_facing_direction(hero, pending.direction) then
+            pending.ready_time = game_time + ESCAPE_TURN_RETRY_DELAY
+            activate_escape_block(hero, game_time, ESCAPE_PREP_BLOCK_DURATION + ESCAPE_TURN_RETRY_DELAY)
             if not is_channelling(hero) then
                 face_direction(hero, pending.direction)
             end
