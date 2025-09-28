@@ -12,8 +12,8 @@ if type(tab.Gear) == "function" then
     end
 end
 
-local GEAR_WIDGET_SCALE = 0.7
-local NON_COMPACT_WIDGET_SCALE = 0.6
+local GEAR_WIDGET_SCALE = 0.5
+local NON_COMPACT_WIDGET_SCALE = 0.45
 local base_widget_scale = GEAR_WIDGET_SCALE
 
 if settings_root == tab then
@@ -68,6 +68,7 @@ local function apply_compact_style(widget, scale)
     call_widget_method(widget, "SetItemSizeMultiplier", effective_scale)
 end
 
+apply_compact_style(tab, base_widget_scale)
 apply_compact_style(settings_root)
 
 local function create_settings_group(label, order, allow_root)
