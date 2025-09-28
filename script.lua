@@ -113,6 +113,7 @@ local ITEM_DEFINITIONS = {
         type = "escape_self",
         modifier = "modifier_item_forcestaff_active",
         search_range = 1600,
+        requires_facing = true,
     },
     hurricane = {
         item_name = "item_hurricane_pike",
@@ -121,6 +122,7 @@ local ITEM_DEFINITIONS = {
         type = "escape_self",
         modifier = "modifier_item_hurricane_pike_active",
         search_range = 1600,
+        requires_facing = true,
     },
     atos = {
         item_name = "item_rod_of_atos",
@@ -1183,50 +1185,56 @@ local function cast_item(hero, item_key, game_time)
             return false
         end
 
-        local pending = pending_escape_casts[item_key]
+        if not definition.requires_facing then
+            clear_pending_escape(item_key)
+            Ability.CastTarget(item, hero, false, false, false, ESCAPE_ORDER_IDENTIFIER)
+            activate_escape_block(hero, game_time, ESCAPE_POST_CAST_BLOCK_DURATION)
+        else
+            local pending = pending_escape_casts[item_key]
 
-        if needs_new_escape(direction, enemy, pending) then
-            pending_escape_casts[item_key] = {
-                ready_time = game_time + ESCAPE_MIN_TURN_DELAY,
-                direction = direction,
-                enemy = enemy,
-            }
-            activate_escape_block(hero, game_time, ESCAPE_PREP_BLOCK_DURATION + ESCAPE_MIN_TURN_DELAY)
-            if not is_channelling(hero) then
-                face_direction(hero, direction)
+            if needs_new_escape(direction, enemy, pending) then
+                pending_escape_casts[item_key] = {
+                    ready_time = game_time + ESCAPE_MIN_TURN_DELAY,
+                    direction = direction,
+                    enemy = enemy,
+                }
+                activate_escape_block(hero, game_time, ESCAPE_PREP_BLOCK_DURATION + ESCAPE_MIN_TURN_DELAY)
+                if not is_channelling(hero) then
+                    face_direction(hero, direction)
+                end
+                return false
             end
-            return false
-        end
 
-        pending.direction = direction
-        pending.enemy = enemy
-        if not pending.ready_time then
-            pending.ready_time = game_time + ESCAPE_MIN_TURN_DELAY
-        end
-        activate_escape_block(hero, game_time, ESCAPE_PREP_BLOCK_DURATION)
+            pending.direction = direction
+            pending.enemy = enemy
+            if not pending.ready_time then
+                pending.ready_time = game_time + ESCAPE_MIN_TURN_DELAY
+            end
+            activate_escape_block(hero, game_time, ESCAPE_PREP_BLOCK_DURATION)
 
-        if game_time < pending.ready_time then
+            if game_time < pending.ready_time then
+                if not is_channelling(hero) then
+                    face_direction(hero, pending.direction)
+                end
+                return false
+            end
+
+            if not is_facing_direction(hero, pending.direction) then
+                pending.ready_time = game_time + ESCAPE_TURN_RETRY_DELAY
+                activate_escape_block(hero, game_time, ESCAPE_PREP_BLOCK_DURATION + ESCAPE_TURN_RETRY_DELAY)
+                if not is_channelling(hero) then
+                    face_direction(hero, pending.direction)
+                end
+                return false
+            end
+
             if not is_channelling(hero) then
                 face_direction(hero, pending.direction)
             end
-            return false
+            Ability.CastTarget(item, hero, false, false, false, ESCAPE_ORDER_IDENTIFIER)
+            activate_escape_block(hero, game_time, ESCAPE_POST_CAST_BLOCK_DURATION)
+            clear_pending_escape(item_key)
         end
-
-        if not is_facing_direction(hero, pending.direction) then
-            pending.ready_time = game_time + ESCAPE_TURN_RETRY_DELAY
-            activate_escape_block(hero, game_time, ESCAPE_PREP_BLOCK_DURATION + ESCAPE_TURN_RETRY_DELAY)
-            if not is_channelling(hero) then
-                face_direction(hero, pending.direction)
-            end
-            return false
-        end
-
-        if not is_channelling(hero) then
-            face_direction(hero, pending.direction)
-        end
-        Ability.CastTarget(item, hero, false, false, false, ESCAPE_ORDER_IDENTIFIER)
-        activate_escape_block(hero, game_time, ESCAPE_POST_CAST_BLOCK_DURATION)
-        clear_pending_escape(item_key)
     elseif definition.type == "escape_position" then
         local direction = get_escape_direction(hero, item, definition, item_key)
         if not direction then
