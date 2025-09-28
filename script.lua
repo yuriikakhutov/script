@@ -26,9 +26,21 @@ local priority_group = tab:Create("Item Priority", 1)
 local threshold_group = tab:Create("Item Thresholds", 2)
 local enemy_range_group = tab:Create("Enemy Range", 3)
 
-local ui = {
-    enable = activation_group:Switch("Enable", true),
-}
+local ui = {}
+ui.enable = activation_group:Switch("Enable", true)
+ui.meteor_combo = activation_group:Slider(
+    "Meteor Hammer Combo",
+    0,
+    1,
+    1,
+    function(value)
+        if value >= 1 then
+            return "Enabled"
+        end
+
+        return "Disabled"
+    end
+)
 
 local ITEM_DEFINITIONS = {
     glimmer = {
@@ -353,6 +365,14 @@ local ITEM_DEFINITIONS = {
     },
 }
 
+local METEOR_COMBO_ITEM_KEY = "__meteor_combo"
+local METEOR_HAMMER_DEFINITION = {
+    item_name = "item_meteor_hammer",
+    icon = "panorama/images/items/meteor_hammer_png.vtex_c",
+    type = "position_enemy",
+    range = 600,
+}
+
 local priority_defaults = {
     glimmer = true,
     ghost = true,
@@ -457,6 +477,8 @@ local function apply_widget_icon(widget, icon_path)
         widget:Icon(icon_path)
     end
 end
+
+apply_widget_icon(ui.meteor_combo, METEOR_HAMMER_DEFINITION.icon)
 
 local priority_items = {}
 for _, key in ipairs(priority_keys) do
@@ -662,6 +684,15 @@ local CONTROL_BLOCKERS = {
     Enum.ModifierState.MODIFIER_STATE_MUTED,
 }
 
+local function is_meteor_combo_enabled()
+    local slider = ui.meteor_combo
+    if not slider or type(slider.Get) ~= "function" then
+        return false
+    end
+
+    return slider:Get() >= 1
+end
+
 local function can_use_item(hero)
     if not Entity.IsAlive(hero) then
         return false
@@ -686,6 +717,49 @@ end
 
 local function mark_cast(item_id, game_time)
     last_cast_times[item_id] = game_time
+end
+
+local function cast_meteor_combo(hero, game_time)
+    if not is_meteor_combo_enabled() then
+        return false
+    end
+
+    if is_recently_cast(METEOR_COMBO_ITEM_KEY, game_time) then
+        return false
+    end
+
+    local item = get_inventory_item(hero, METEOR_HAMMER_DEFINITION)
+    if not item then
+        return false
+    end
+
+    if not Ability.IsReady(item) then
+        return false
+    end
+
+    local mana = NPC.GetMana(hero)
+    if not Ability.IsCastable(item, mana) then
+        return false
+    end
+
+    if not can_use_item(hero) then
+        return false
+    end
+
+    local target = find_enemy_target(hero, item, METEOR_HAMMER_DEFINITION, METEOR_COMBO_ITEM_KEY)
+    if not target then
+        return false
+    end
+
+    local target_pos = Entity.GetAbsOrigin(target)
+    if not target_pos then
+        return false
+    end
+
+    Ability.CastPosition(item, target_pos)
+    mark_cast(METEOR_COMBO_ITEM_KEY, game_time)
+
+    return true
 end
 
 local function get_enabled_items()
@@ -986,6 +1060,10 @@ local function cast_item(hero, item_key, game_time)
     end
 
     mark_cast(item_key, game_time)
+
+    if item_key == "glimmer" or item_key == "bkb" then
+        cast_meteor_combo(hero, game_time)
+    end
 
     return CAST_RESULT_CAST
 end
