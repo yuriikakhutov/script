@@ -645,12 +645,16 @@ local function get_escape_direction(hero, ability, definition, item_key)
         return nil, nil
     end
 
-    local direction = hero_pos - enemy_pos
+    local direction = enemy_pos - hero_pos
     direction = normalize_flat_vector(direction)
 
     if not direction then
         return nil, nil
     end
+
+    direction.x = -direction.x
+    direction.y = -direction.y
+    direction.z = 0
 
     return direction, enemy
 end
@@ -923,6 +927,9 @@ function auto_defender.OnUpdate()
     local health_percent = (current_health / max_health) * 100.0
 
     local game_time = GameRules.GetGameTime()
+    if is_escape_blocking(game_time) then
+        issue_stop_order(hero, game_time)
+    end
     local items_to_use = get_enabled_items()
 
     if #items_to_use == 0 then
