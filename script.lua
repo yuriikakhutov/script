@@ -650,6 +650,7 @@ local ESCAPE_STOP_COOLDOWN = 0.05
 local escape_block_end_time = 0
 local escape_last_stop_time = 0
 local escape_last_face_time = 0
+local allowed_escape_sequences = {}
 local ESCAPE_TURN_GRACE_PERIOD = 0.18
 local pending_escape_casts = {}
 local ESCAPE_ORDER_IDENTIFIER = "auto_defender_escape"
@@ -826,6 +827,7 @@ local function clear_escape_block()
     escape_block_end_time = 0
     escape_last_stop_time = 0
     escape_last_face_time = 0
+    allowed_escape_sequences = {}
 end
 
 local function should_block_order(data)
@@ -855,6 +857,30 @@ local function should_block_order(data)
 end
 
 function auto_defender.OnPrepareUnitOrders(data)
+    if data and data.identifier == ESCAPE_ORDER_IDENTIFIER and data.sequenceNumber then
+        allowed_escape_sequences[data.sequenceNumber] = true
+    end
+
+    if should_block_order(data) then
+        return false
+    end
+
+    return true
+end
+
+function auto_defender.OnExecuteOrder(data)
+    if data and data.identifier == ESCAPE_ORDER_IDENTIFIER then
+        if data.sequenceNumber then
+            allowed_escape_sequences[data.sequenceNumber] = nil
+        end
+        return true
+    end
+
+    if data and data.sequenceNumber and allowed_escape_sequences[data.sequenceNumber] then
+        allowed_escape_sequences[data.sequenceNumber] = nil
+        return true
+    end
+
     if should_block_order(data) then
         return false
     end
