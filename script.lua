@@ -81,6 +81,13 @@ local ITEM_DEFINITIONS = {
         type = "no_target",
         modifier = "modifier_item_blade_mail_reflect",
     },
+    mjollnir = {
+        item_name = "item_mjollnir",
+        icon = "panorama/images/items/mjollnir_png.vtex_c",
+        display_name = "Mjollnir",
+        type = "no_target",
+        modifier = "modifier_item_mjollnir_shield",
+    },
     eul = {
         item_name = "item_cyclone",
         icon = "panorama/images/items/cyclone_png.vtex_c",
@@ -343,6 +350,7 @@ local priority_items = {
     { "lotus", ITEM_DEFINITIONS.lotus.icon, false },
     { "crimson", ITEM_DEFINITIONS.crimson.icon, false },
     { "blade_mail", ITEM_DEFINITIONS.blade_mail.icon, false },
+    { "mjollnir", ITEM_DEFINITIONS.mjollnir.icon, false },
     { "eul", ITEM_DEFINITIONS.eul.icon, false },
     { "wind_waker", ITEM_DEFINITIONS.wind_waker.icon, false },
     { "force", ITEM_DEFINITIONS.force.icon, false },
