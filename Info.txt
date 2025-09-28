@@ -10,4 +10,3 @@ https://uczone.gitbook.io/api-v2.0
 Только C++20. Без UB, using namespace std, #define, goto, reinterpret_cast, union, NULL
 Корректная спецификация noexcept
 Комментарии ТОЛЬКО в исключительных случаях
-ЗАДАЧА: [  ]
