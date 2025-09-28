@@ -407,71 +407,13 @@ local priority_keys = {
     "shadow_blade",
 }
 
-local DEFAULT_ICON_PATH = "panorama/images/items/emptyitembg_png.vtex_c"
-
-local function resolve_item_icon(definition)
-    local icon = definition.icon
-    if type(icon) == "string" and icon ~= "" then
-        return icon
-    end
-
-    local source = definition.item_name
-    if not source then
-        local names = definition.item_names
-        if type(names) == "table" and #names > 0 then
-            source = names[1]
-        end
-    end
-
-    if type(source) == "string" then
-        local prefix = "item_"
-        if source:sub(1, #prefix) == prefix then
-            source = source:sub(#prefix + 1)
-        end
-
-        if source ~= "" then
-            return string.format("panorama/images/items/%s_png.vtex_c", source)
-        end
-    end
-
-    return DEFAULT_ICON_PATH
-end
-
-local function apply_widget_icon(widget, icon_path)
-    if not widget or type(icon_path) ~= "string" or icon_path == "" then
-        return
-    end
-
-    local setters = {
-        "SetImage",
-        "SetIcon",
-        "SetTexture",
-        "SetTextureID",
-    }
-
-    for i = 1, #setters do
-        local name = setters[i]
-        local setter = widget[name]
-        if type(setter) == "function" then
-            setter(widget, icon_path)
-            return
-        end
-    end
-
-    if type(widget.Image) == "function" then
-        widget:Image(icon_path)
-    elseif type(widget.Icon) == "function" then
-        widget:Icon(icon_path)
-    end
-end
-
 local priority_items = {}
 for _, key in ipairs(priority_keys) do
     local definition = ITEM_DEFINITIONS[key]
     if definition then
         priority_items[#priority_items + 1] = {
             key,
-            resolve_item_icon(definition),
+            definition.display_name or key,
             priority_defaults[key] or false,
         }
     end
@@ -618,7 +560,8 @@ for _, item in ipairs(priority_items) do
     local key = item[1]
     local definition = ITEM_DEFINITIONS[key]
     if definition then
-        local threshold_label = string.format("Порог HP для %s (%%)", definition.display_name)
+        local display_name = definition.display_name or key
+        local threshold_label = string.format("Порог HP для %s (%%)", display_name)
         item_thresholds[key] = threshold_group:Slider(
             threshold_label,
             1,
@@ -628,8 +571,6 @@ for _, item in ipairs(priority_items) do
                 return string.format("%d%%", value)
             end
         )
-        apply_widget_icon(item_thresholds[key], resolve_item_icon(definition))
-
         local needs_enemy_range =
             definition.type == "target_enemy"
             or definition.type == "position_enemy"
@@ -643,7 +584,7 @@ for _, item in ipairs(priority_items) do
             end
 
             item_enemy_ranges[key] = enemy_range_group:Slider(
-                string.format("Радиус врага для %s", definition.display_name),
+                string.format("Радиус врага для %s", display_name),
                 100,
                 3000,
                 math.floor(default_range + 0.5),
@@ -651,7 +592,6 @@ for _, item in ipairs(priority_items) do
                     return string.format("%d ед.", value)
                 end
             )
-            apply_widget_icon(item_enemy_ranges[key], resolve_item_icon(definition))
         end
     end
 end
