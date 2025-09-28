@@ -153,6 +153,14 @@ local ITEM_DEFINITIONS = {
         enemy_modifier = "modifier_bloodthorn_debuff",
         range = 900,
     },
+    orchid = {
+        item_name = "item_orchid",
+        icon = "panorama/images/items/orchid_png.vtex_c",
+        display_name = "Orchid Malevolence",
+        type = "target_enemy",
+        enemy_modifier = "modifier_orchid_malevolence_debuff",
+        range = 900,
+    },
     silver = {
         item_name = "item_silver_edge",
         icon = "panorama/images/items/silver_edge_png.vtex_c",
@@ -332,6 +340,7 @@ local priority_items = {
     { "hex", ITEM_DEFINITIONS.hex.icon, false },
     { "abyssal", ITEM_DEFINITIONS.abyssal.icon, false },
     { "bloodthorn", ITEM_DEFINITIONS.bloodthorn.icon, false },
+    { "orchid", ITEM_DEFINITIONS.orchid.icon, false },
     { "diffusal", ITEM_DEFINITIONS.diffusal.icon, false },
     { "gleipnir", ITEM_DEFINITIONS.gleipnir.icon, false },
     { "silver", ITEM_DEFINITIONS.silver.icon, false },
@@ -365,6 +374,7 @@ for _, item in ipairs(priority_items) do
             definition.type == "target_enemy"
             or definition.type == "position_enemy"
             or definition.type == "escape_self"
+            or definition.type == "escape_position"
             or definition.requires_enemy
 
         if needs_enemy_range then
