@@ -89,6 +89,8 @@ local ITEM_DEFINITIONS = {
         display_name = "Blade Mail",
         type = "no_target",
         modifier = "modifier_item_blade_mail_reflect",
+        requires_enemy = true,
+        search_range = 1200,
     },
     satanic = {
         item_name = "item_satanic",
@@ -96,6 +98,8 @@ local ITEM_DEFINITIONS = {
         display_name = "Satanic",
         type = "no_target",
         modifier = "modifier_item_satanic_unholy_rage",
+        requires_enemy = true,
+        search_range = 1200,
     },
     mjollnir = {
         item_name = "item_mjollnir",
