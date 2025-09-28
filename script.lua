@@ -130,16 +130,14 @@ local ITEM_DEFINITIONS = {
         item_name = "item_force_staff",
         icon = "panorama/images/items/force_staff_png.vtex_c",
         display_name = "Force Staff",
-        type = "escape_self",
-        modifier = "modifier_item_forcestaff_active",
+        type = "target_enemy",
         search_range = 1600,
     },
     hurricane = {
         item_name = "item_hurricane_pike",
         icon = "panorama/images/items/hurricane_pike_png.vtex_c",
         display_name = "Hurricane Pike",
-        type = "escape_self",
-        modifier = "modifier_item_hurricane_pike_active",
+        type = "target_enemy",
         search_range = 1600,
     },
     atos = {
@@ -559,7 +557,6 @@ for _, item in ipairs(priority_items) do
         local needs_enemy_range =
             definition.type == "target_enemy"
             or definition.type == "position_enemy"
-            or definition.type == "escape_self"
             or definition.type == "escape_position"
             or definition.requires_enemy
 
@@ -896,13 +893,6 @@ local function cast_item(hero, item_key, game_time)
         end
 
         Ability.CastPosition(item, target_pos, false, false, false, ESCAPE_ORDER_IDENTIFIER)
-    elseif definition.type == "escape_self" then
-        local direction = get_escape_direction(hero, item, definition, item_key)
-        if not direction then
-            return CAST_RESULT_NONE
-        end
-
-        Ability.CastTarget(item, hero, false, false, false, ESCAPE_ORDER_IDENTIFIER)
     elseif definition.type == "escape_position" then
         local direction = get_escape_direction(hero, item, definition, item_key)
         if not direction then
