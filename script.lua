@@ -3,7 +3,88 @@
 local auto_defender = {}
 
 local tab = Menu.Create("General", "Auto Defender", "Auto Defender", "Auto Defender")
-local info_group = tab:Create("Info", 0)
+
+local settings_root = tab
+if type(tab.Gear) == "function" then
+    local ok, gear_tab = pcall(tab.Gear, tab, "Settings")
+    if ok and gear_tab then
+        settings_root = gear_tab
+    end
+end
+
+local function call_widget_method(widget, method_name, ...)
+    if not widget or type(method_name) ~= "string" then
+        return false
+    end
+
+    local method = widget[method_name]
+    if type(method) ~= "function" then
+        return false
+    end
+
+    local ok = pcall(method, widget, ...)
+    return ok and true or false
+end
+
+local COMPACT_WIDGET_SCALE = 0.85
+
+local function apply_compact_style(widget)
+    if not widget then
+        return
+    end
+
+    if call_widget_method(widget, "SetScale", COMPACT_WIDGET_SCALE) then
+        return
+    end
+
+    if call_widget_method(widget, "SetScaleMultiplier", COMPACT_WIDGET_SCALE) then
+        return
+    end
+
+    if call_widget_method(widget, "SetSizeMultiplier", COMPACT_WIDGET_SCALE) then
+        return
+    end
+
+    if call_widget_method(widget, "SetWidthMultiplier", COMPACT_WIDGET_SCALE) then
+        return
+    end
+
+    if call_widget_method(widget, "SetHeightMultiplier", COMPACT_WIDGET_SCALE) then
+        return
+    end
+
+    if call_widget_method(widget, "SetItemHeightMultiplier", COMPACT_WIDGET_SCALE) then
+        return
+    end
+
+    call_widget_method(widget, "SetItemSizeMultiplier", COMPACT_WIDGET_SCALE)
+end
+
+local function create_settings_group(label, order, allow_root)
+    if settings_root ~= tab and type(settings_root) == "table" then
+        if type(settings_root.Create) == "function" then
+            local ok, group = pcall(settings_root.Create, settings_root, label, order)
+            if ok and group then
+                return group
+            end
+        end
+
+        if allow_root and type(settings_root.Switch) == "function" then
+            return settings_root
+        end
+    end
+
+    if type(tab.Create) == "function" then
+        local ok, group = pcall(tab.Create, tab, label, order)
+        if ok and group then
+            return group
+        end
+    end
+
+    return settings_root
+end
+
+local info_group = create_settings_group("Info", 0)
 if info_group.Label then
     info_group:Label("Author: GhostyPowa")
 elseif info_group.Text then
@@ -11,6 +92,7 @@ elseif info_group.Text then
 else
     local author_display = info_group:Switch("Author: GhostyPowa", false)
     if author_display then
+        apply_compact_style(author_display)
         if author_display.SetEnabled then
             author_display:SetEnabled(false)
         elseif author_display.Disable then
@@ -21,14 +103,23 @@ else
     end
 end
 
-local activation_group = tab:Create("Activation")
-local priority_group = tab:Create("Item Priority", 1)
-local threshold_group = tab:Create("Item Thresholds", 2)
-local enemy_range_group = tab:Create("Enemy Range", 3)
+apply_compact_style(info_group)
+
+local activation_group = create_settings_group("Activation", nil, true)
+local priority_group = create_settings_group("Item Priority", 1)
+local threshold_group = create_settings_group("Item Thresholds", 2)
+local enemy_range_group = create_settings_group("Enemy Range", 3)
 
 local ui = {}
 ui.enable = activation_group:Switch("Enable", true)
 ui.meteor_combo = activation_group:Switch("Meteor Hammer Combo", true)
+
+apply_compact_style(ui.enable)
+apply_compact_style(ui.meteor_combo)
+apply_compact_style(activation_group)
+apply_compact_style(priority_group)
+apply_compact_style(threshold_group)
+apply_compact_style(enemy_range_group)
 
 local ITEM_DEFINITIONS = {
     glimmer = {
@@ -466,6 +557,7 @@ local function apply_widget_icon(widget, icon_path)
     end
 end
 
+
 apply_widget_icon(ui.meteor_combo, METEOR_HAMMER_DEFINITION.icon)
 
 local priority_items = {}
@@ -481,6 +573,8 @@ for _, key in ipairs(priority_keys) do
 end
 
 local priority_widget = priority_group:MultiSelect("Items", priority_items, true)
+apply_compact_style(priority_group)
+apply_compact_style(priority_widget)
 priority_widget:DragAllowed(true)
 priority_widget:ToolTip("Drag to reorder priority. Enable items you want to use.")
 
@@ -497,6 +591,7 @@ local priority_delay_slider = priority_group:Slider(
         return string.format("%.2fs", value / 1000.0)
     end
 )
+apply_compact_style(priority_delay_slider)
 
 local DEFAULT_SEARCH_RANGE = 1200
 
@@ -631,6 +726,8 @@ for _, item in ipairs(priority_items) do
                 return string.format("%d%%", value)
             end
         )
+        apply_compact_style(threshold_group)
+        apply_compact_style(item_thresholds[key])
         apply_widget_icon(item_thresholds[key], resolve_item_icon(definition))
 
         local needs_enemy_range =
@@ -654,6 +751,8 @@ for _, item in ipairs(priority_items) do
                     return string.format("%d units", value)
                 end
             )
+            apply_compact_style(enemy_range_group)
+            apply_compact_style(item_enemy_ranges[key])
             apply_widget_icon(item_enemy_ranges[key], resolve_item_icon(definition))
         end
     end
