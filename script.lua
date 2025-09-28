@@ -122,6 +122,7 @@ local ITEM_DEFINITIONS = {
         type = "escape_self",
         modifier = "modifier_item_forcestaff_active",
         search_range = 1600,
+        requires_facing = true,
     },
     hurricane = {
         item_name = "item_hurricane_pike",
@@ -130,6 +131,7 @@ local ITEM_DEFINITIONS = {
         type = "escape_self",
         modifier = "modifier_item_hurricane_pike_active",
         search_range = 1600,
+        requires_facing = true,
     },
     atos = {
         item_name = "item_rod_of_atos",
@@ -574,6 +576,12 @@ local CAST_COOLDOWN = 0.2
 local last_cast_times = {}
 local priority_delay_until = 0.0
 
+local CAST_RESULT_NONE = 0
+local CAST_RESULT_CAST = 1
+local CAST_RESULT_PENDING = 2
+
+local ESCAPE_FACING_THRESHOLD = 0.95
+
 local CONTROL_BLOCKERS = {
     Enum.ModifierState.MODIFIER_STATE_STUNNED,
     Enum.ModifierState.MODIFIER_STATE_HEXED,
@@ -604,6 +612,82 @@ end
 
 local function mark_cast(item_id, game_time)
     last_cast_times[item_id] = game_time
+end
+
+local function is_channelling(hero)
+    if not NPC.IsChannellingAbility then
+        return false
+    end
+
+    return NPC.IsChannellingAbility(hero)
+end
+
+local function get_forward_vector(hero)
+    local rotation = Entity.GetRotation(hero)
+    if not rotation then
+        return nil
+    end
+
+    local yaw = rotation.y
+    if not yaw then
+        return nil
+    end
+
+    local radians = math.rad(yaw)
+
+    return Vector(math.cos(radians), math.sin(radians), 0)
+end
+
+local function is_facing_direction(hero, direction)
+    if not direction then
+        return false
+    end
+
+    local forward = get_forward_vector(hero)
+    if not forward then
+        return false
+    end
+
+    local dot = forward.x * direction.x + forward.y * direction.y
+
+    return dot >= ESCAPE_FACING_THRESHOLD
+end
+
+local function face_direction(hero, direction)
+    if not hero or not direction or is_channelling(hero) then
+        return false
+    end
+
+    if not Players or not Player or not Players.GetLocal or not Player.PrepareUnitOrders then
+        return false
+    end
+
+    local player = Players.GetLocal()
+    if not player then
+        return false
+    end
+
+    local hero_pos = Entity.GetAbsOrigin(hero)
+    if not hero_pos then
+        return false
+    end
+
+    local move_target = hero_pos + direction * 50
+    move_target.z = hero_pos.z
+
+    Player.PrepareUnitOrders(
+        player,
+        Enum.UnitOrder.DOTA_UNIT_ORDER_MOVE_TO_POSITION,
+        nil,
+        move_target,
+        nil,
+        Enum.PlayerOrderIssuer.DOTA_ORDER_ISSUER_HERO_ONLY,
+        hero,
+        false,
+        false
+    )
+
+    return true
 end
 
 local function get_enabled_items()
@@ -814,47 +898,47 @@ end
 local function cast_item(hero, item_key, game_time)
     local definition = ITEM_DEFINITIONS[item_key]
     if not definition then
-        return false
+        return CAST_RESULT_NONE
     end
 
     if is_recently_cast(item_key, game_time) then
-        return false
+        return CAST_RESULT_NONE
     end
 
     local item = get_inventory_item(hero, definition)
     if not item then
-        return false
+        return CAST_RESULT_NONE
     end
 
     if definition.modifier and NPC.HasModifier(hero, definition.modifier) then
-        return false
+        return CAST_RESULT_NONE
     end
 
     if not Ability.IsReady(item) then
-        return false
+        return CAST_RESULT_NONE
     end
 
     if definition.requires_charges then
         local charges = Ability.GetCurrentCharges(item)
         if not charges or charges <= 0 then
-            return false
+            return CAST_RESULT_NONE
         end
     end
 
     local mana = NPC.GetMana(hero)
     if not Ability.IsCastable(item, mana) then
-        return false
+        return CAST_RESULT_NONE
     end
 
     if not can_use_item(hero) then
-        return false
+        return CAST_RESULT_NONE
     end
 
     if definition.requires_enemy then
         local range = get_enemy_search_range(hero, item, definition, item_key)
         local enemies = Entity.GetHeroesInRadius(hero, range, Enum.TeamType.TEAM_ENEMY, true, true)
         if not enemies or #enemies == 0 then
-            return false
+            return CAST_RESULT_NONE
         end
     end
 
@@ -865,38 +949,46 @@ local function cast_item(hero, item_key, game_time)
     elseif definition.type == "target_enemy" then
         local target = find_enemy_target(hero, item, definition, item_key)
         if not target then
-            return false
+            return CAST_RESULT_NONE
         end
 
         Ability.CastTarget(item, target, false, false, false, ESCAPE_ORDER_IDENTIFIER)
     elseif definition.type == "position_enemy" then
         local target = find_enemy_target(hero, item, definition, item_key)
         if not target then
-            return false
+            return CAST_RESULT_NONE
         end
 
         local target_pos = Entity.GetAbsOrigin(target)
         if not target_pos then
-            return false
+            return CAST_RESULT_NONE
         end
 
         Ability.CastPosition(item, target_pos, false, false, false, ESCAPE_ORDER_IDENTIFIER)
     elseif definition.type == "escape_self" then
         local direction = get_escape_direction(hero, item, definition, item_key)
         if not direction then
-            return false
+            return CAST_RESULT_NONE
+        end
+
+        if definition.requires_facing and not is_facing_direction(hero, direction) then
+            if face_direction(hero, direction) then
+                return CAST_RESULT_PENDING
+            end
+
+            return CAST_RESULT_NONE
         end
 
         Ability.CastTarget(item, hero, false, false, false, ESCAPE_ORDER_IDENTIFIER)
     elseif definition.type == "escape_position" then
         local direction = get_escape_direction(hero, item, definition, item_key)
         if not direction then
-            return false
+            return CAST_RESULT_NONE
         end
 
         local hero_pos = Entity.GetAbsOrigin(hero)
         if not hero_pos then
-            return false
+            return CAST_RESULT_NONE
         end
 
         local distance = definition.escape_distance or get_effective_cast_range(hero, item, definition)
@@ -909,12 +1001,12 @@ local function cast_item(hero, item_key, game_time)
 
         Ability.CastPosition(item, cast_position, false, false, false, ESCAPE_ORDER_IDENTIFIER)
     else
-        return false
+        return CAST_RESULT_NONE
     end
 
     mark_cast(item_key, game_time)
 
-    return true
+    return CAST_RESULT_CAST
 end
 
 function auto_defender.OnUpdate()
@@ -964,7 +1056,9 @@ function auto_defender.OnUpdate()
     for _, key in ipairs(items_to_use) do
         local threshold_slider = item_thresholds[key]
         if threshold_slider and health_percent <= threshold_slider:Get() then
-            if cast_item(hero, key, game_time) then
+            local result = cast_item(hero, key, game_time)
+
+            if result == CAST_RESULT_CAST then
                 if priority_delay_slider then
                     local delay_ms = priority_delay_slider:Get()
                     if delay_ms and delay_ms > 0 then
@@ -973,6 +1067,8 @@ function auto_defender.OnUpdate()
                         priority_delay_until = 0.0
                     end
                 end
+                break
+            elseif result == CAST_RESULT_PENDING then
                 break
             end
         end
