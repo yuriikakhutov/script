@@ -28,19 +28,7 @@ local enemy_range_group = tab:Create("Enemy Range", 3)
 
 local ui = {}
 ui.enable = activation_group:Switch("Enable", true)
-ui.meteor_combo = activation_group:Slider(
-    "Meteor Hammer Combo",
-    0,
-    1,
-    1,
-    function(value)
-        if value >= 1 then
-            return "Enabled"
-        end
-
-        return "Disabled"
-    end
-)
+ui.meteor_combo = activation_group:Switch("Meteor Hammer Combo", true)
 
 local ITEM_DEFINITIONS = {
     glimmer = {
@@ -685,12 +673,17 @@ local CONTROL_BLOCKERS = {
 }
 
 local function is_meteor_combo_enabled()
-    local slider = ui.meteor_combo
-    if not slider or type(slider.Get) ~= "function" then
+    local toggle = ui.meteor_combo
+    if not toggle or type(toggle.Get) ~= "function" then
         return false
     end
 
-    return slider:Get() >= 1
+    local value = toggle:Get()
+    if type(value) == "boolean" then
+        return value
+    end
+
+    return value ~= 0
 end
 
 local function can_use_item(hero)
