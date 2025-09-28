@@ -14,9 +14,9 @@ if type(tab.Gear) == "function" then
     end
 end
 
-local DEFAULT_GEAR_WIDGET_SCALE = 0.35
-local DEFAULT_NON_COMPACT_WIDGET_SCALE = 0.3
-local MIN_WIDGET_SCALE = 0.2
+local DEFAULT_GEAR_WIDGET_SCALE = 0.12
+local DEFAULT_NON_COMPACT_WIDGET_SCALE = 0.1
+local MIN_WIDGET_SCALE = 0.1
 local MAX_WIDGET_SCALE = 1.0
 
 local base_widget_scale = DEFAULT_GEAR_WIDGET_SCALE
@@ -210,6 +210,9 @@ ui.scale = activation_group:Slider(
 apply_compact_style(ui.enable)
 apply_compact_style(ui.meteor_combo)
 apply_compact_style(ui.scale)
+if ui.scale and ui.scale.Set then
+    ui.scale:Set(last_scale_percent)
+end
 if activation_group and activation_group ~= settings_root then
     apply_compact_style(activation_group)
 end
