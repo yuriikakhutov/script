@@ -433,7 +433,9 @@ for _, item in ipairs(priority_items) do
 end
 
 local CAST_COOLDOWN = 0.2
+local PRIORITY_CHAIN_DELAY = 0.35
 local last_cast_times = {}
+local next_priority_time = 0
 
 local CONTROL_BLOCKERS = {
     Enum.ModifierState.MODIFIER_STATE_STUNNED,
@@ -1126,11 +1128,13 @@ function auto_defender.OnUpdate()
         last_cast_times = {}
         pending_escape_casts = {}
         clear_escape_block()
+        next_priority_time = 0
         return
     end
 
     if not ui.enable:Get() then
         clear_escape_block()
+        next_priority_time = 0
         return
     end
 
@@ -1138,6 +1142,7 @@ function auto_defender.OnUpdate()
     if not hero or NPC.IsIllusion(hero) or not Entity.IsAlive(hero) or Entity.IsDormant(hero) then
         pending_escape_casts = {}
         clear_escape_block()
+        next_priority_time = 0
         return
     end
 
@@ -1153,6 +1158,14 @@ function auto_defender.OnUpdate()
     if is_escape_blocking(game_time) then
         issue_stop_order(hero, game_time)
     end
+
+    if next_priority_time > 0 then
+        if game_time and game_time < next_priority_time then
+            return
+        end
+        next_priority_time = 0
+    end
+
     local items_to_use = get_enabled_items()
 
     if #items_to_use == 0 then
@@ -1162,7 +1175,12 @@ function auto_defender.OnUpdate()
     for _, key in ipairs(items_to_use) do
         local threshold_slider = item_thresholds[key]
         if threshold_slider and health_percent <= threshold_slider:Get() then
-            cast_item(hero, key, game_time)
+            if cast_item(hero, key, game_time) then
+                if game_time then
+                    next_priority_time = game_time + PRIORITY_CHAIN_DELAY
+                end
+                break
+            end
         end
     end
 end
@@ -1171,6 +1189,7 @@ function auto_defender.OnGameEnd()
     last_cast_times = {}
     pending_escape_casts = {}
     clear_escape_block()
+    next_priority_time = 0
 end
 
 return auto_defender
