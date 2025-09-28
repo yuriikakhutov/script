@@ -843,8 +843,6 @@ local function normalize_flat_vector(vector)
     return vector
 end
 
-local ESCAPE_ORDER_IDENTIFIER = "auto_defender_escape"
-
 local function get_escape_direction(hero, ability, definition, item_key)
     local hero_pos = Entity.GetAbsOrigin(hero)
     if not hero_pos then
@@ -921,16 +919,16 @@ local function cast_item(hero, item_key, game_time)
     end
 
     if definition.type == "no_target" then
-        Ability.CastNoTarget(item, false, false, false, ESCAPE_ORDER_IDENTIFIER)
+        Ability.CastNoTarget(item)
     elseif definition.type == "target_self" then
-        Ability.CastTarget(item, hero, false, false, false, ESCAPE_ORDER_IDENTIFIER)
+        Ability.CastTarget(item, hero)
     elseif definition.type == "target_enemy" then
         local target = find_enemy_target(hero, item, definition, item_key)
         if not target then
             return CAST_RESULT_NONE
         end
 
-        Ability.CastTarget(item, target, false, false, false, ESCAPE_ORDER_IDENTIFIER)
+        Ability.CastTarget(item, target)
     elseif definition.type == "position_enemy" then
         local target = find_enemy_target(hero, item, definition, item_key)
         if not target then
@@ -942,7 +940,7 @@ local function cast_item(hero, item_key, game_time)
             return CAST_RESULT_NONE
         end
 
-        Ability.CastPosition(item, target_pos, false, false, false, ESCAPE_ORDER_IDENTIFIER)
+        Ability.CastPosition(item, target_pos)
     elseif definition.type == "escape_position" then
         local direction = get_escape_direction(hero, item, definition, item_key)
         if not direction then
@@ -962,7 +960,7 @@ local function cast_item(hero, item_key, game_time)
         local cast_position = hero_pos + direction * distance
         cast_position.z = hero_pos.z
 
-        Ability.CastPosition(item, cast_position, false, false, false, ESCAPE_ORDER_IDENTIFIER)
+        Ability.CastPosition(item, cast_position)
     else
         return CAST_RESULT_NONE
     end
