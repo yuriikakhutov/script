@@ -24,6 +24,7 @@ end
 local activation_group = tab:Create("Activation")
 local priority_group = tab:Create("Item Priority", 1)
 local threshold_group = tab:Create("Item Thresholds", 2)
+local enemy_range_group = tab:Create("Enemy Range", 3)
 
 local ui = {
     enable = activation_group:Switch("Enable", true),
@@ -43,6 +44,8 @@ local ITEM_DEFINITIONS = {
         display_name = "Ghost Scepter",
         type = "no_target",
         modifier = "modifier_ghost_state",
+        requires_enemy = true,
+        search_range = 1200,
     },
     bkb = {
         item_name = "item_black_king_bar",
@@ -50,6 +53,8 @@ local ITEM_DEFINITIONS = {
         display_name = "Black King Bar",
         type = "no_target",
         modifier = "modifier_black_king_bar_immune",
+        requires_enemy = true,
+        search_range = 1200,
     },
     lotus = {
         item_name = "item_lotus_orb",
@@ -57,6 +62,8 @@ local ITEM_DEFINITIONS = {
         display_name = "Lotus Orb",
         type = "target_self",
         modifier = "modifier_item_lotus_orb_active",
+        requires_enemy = true,
+        search_range = 1200,
     },
     crimson = {
         item_name = "item_crimson_guard",
@@ -64,6 +71,17 @@ local ITEM_DEFINITIONS = {
         display_name = "Crimson Guard",
         type = "no_target",
         modifier = "modifier_item_crimson_guard_extra",
+        requires_enemy = true,
+        search_range = 1200,
+    },
+    shivas = {
+        item_name = "item_shivas_guard",
+        icon = "panorama/images/items/shivas_guard_png.vtex_c",
+        display_name = "Shiva's Guard",
+        type = "no_target",
+        modifier = "modifier_item_shivas_guard_active",
+        requires_enemy = true,
+        search_range = 1200,
     },
     blade_mail = {
         item_name = "item_blade_mail",
@@ -71,6 +89,24 @@ local ITEM_DEFINITIONS = {
         display_name = "Blade Mail",
         type = "no_target",
         modifier = "modifier_item_blade_mail_reflect",
+        requires_enemy = true,
+        search_range = 1200,
+    },
+    satanic = {
+        item_name = "item_satanic",
+        icon = "panorama/images/items/satanic_png.vtex_c",
+        display_name = "Satanic",
+        type = "no_target",
+        modifier = "modifier_item_satanic_unholy_rage",
+        requires_enemy = true,
+        search_range = 1200,
+    },
+    mjollnir = {
+        item_name = "item_mjollnir",
+        icon = "panorama/images/items/mjollnir_png.vtex_c",
+        display_name = "Mjollnir",
+        type = "target_self",
+        modifier = "modifier_item_mjollnir_shield",
     },
     eul = {
         item_name = "item_cyclone",
@@ -78,6 +114,8 @@ local ITEM_DEFINITIONS = {
         display_name = "Eul's Scepter",
         type = "target_self",
         modifier = "modifier_eul_cyclone",
+        requires_enemy = true,
+        search_range = 1200,
     },
     wind_waker = {
         item_name = "item_wind_waker",
@@ -85,21 +123,21 @@ local ITEM_DEFINITIONS = {
         display_name = "Wind Waker",
         type = "target_self",
         modifier = "modifier_wind_waker_cyclone",
+        requires_enemy = true,
+        search_range = 1200,
     },
     force = {
         item_name = "item_force_staff",
         icon = "panorama/images/items/force_staff_png.vtex_c",
         display_name = "Force Staff",
-        type = "escape_self",
-        modifier = "modifier_item_forcestaff_active",
+        type = "target_enemy",
         search_range = 1600,
     },
     hurricane = {
         item_name = "item_hurricane_pike",
         icon = "panorama/images/items/hurricane_pike_png.vtex_c",
         display_name = "Hurricane Pike",
-        type = "escape_self",
-        modifier = "modifier_item_hurricane_pike_active",
+        type = "target_enemy",
         search_range = 1600,
     },
     atos = {
@@ -134,20 +172,20 @@ local ITEM_DEFINITIONS = {
         enemy_modifier = "modifier_item_diffusal_blade_slow",
         range = 600,
     },
-    gleipnir = {
-        item_name = "item_gleipnir",
-        icon = "panorama/images/items/gleipnir_png.vtex_c",
-        display_name = "Gleipnir",
-        type = "position_enemy",
-        enemy_modifier = "modifier_gleipnir_root",
-        range = 1100,
-    },
     bloodthorn = {
         item_name = "item_bloodthorn",
         icon = "panorama/images/items/bloodthorn_png.vtex_c",
         display_name = "Bloodthorn",
         type = "target_enemy",
         enemy_modifier = "modifier_bloodthorn_debuff",
+        range = 900,
+    },
+    orchid = {
+        item_name = "item_orchid",
+        icon = "panorama/images/items/orchid_png.vtex_c",
+        display_name = "Orchid Malevolence",
+        type = "target_enemy",
+        enemy_modifier = "modifier_orchid_malevolence_debuff",
         range = 900,
     },
     silver = {
@@ -181,6 +219,8 @@ local ITEM_DEFINITIONS = {
         display_name = "Pipe of Insight",
         type = "no_target",
         modifier = "modifier_item_pipe_barrier",
+        requires_enemy = true,
+        search_range = 1200,
     },
     ethereal = {
         item_name = "item_ethereal_blade",
@@ -188,6 +228,8 @@ local ITEM_DEFINITIONS = {
         display_name = "Ethereal Blade",
         type = "target_self",
         modifier = "modifier_item_ethereal_blade_ethereal",
+        requires_enemy = true,
+        search_range = 1200,
     },
     nullifier = {
         item_name = "item_nullifier",
@@ -281,6 +323,17 @@ local ITEM_DEFINITIONS = {
         display_name = "Solar Crest",
         type = "target_self",
         modifier = "modifier_item_solar_crest_armor_addition",
+        requires_enemy = true,
+        search_range = 1200,
+    },
+    pavise = {
+        item_name = "item_pavise",
+        icon = "panorama/images/items/pavise_png.vtex_c",
+        display_name = "Pavise",
+        type = "target_self",
+        modifier = "modifier_item_pavise_barrier",
+        requires_enemy = true,
+        search_range = 1200,
     },
     drums = {
         item_name = "item_ancient_janggo",
@@ -295,58 +348,272 @@ local ITEM_DEFINITIONS = {
         display_name = "Boots of Bearing",
         type = "no_target",
         modifier = "modifier_item_boots_of_bearing_active",
+        requires_enemy = true,
+        search_range = 1200,
     },
 }
 
-local priority_items = {
-    { "glimmer", ITEM_DEFINITIONS.glimmer.icon, true },
-    { "ghost", ITEM_DEFINITIONS.ghost.icon, true },
-    { "bkb", ITEM_DEFINITIONS.bkb.icon, true },
-    { "lotus", ITEM_DEFINITIONS.lotus.icon, false },
-    { "crimson", ITEM_DEFINITIONS.crimson.icon, false },
-    { "blade_mail", ITEM_DEFINITIONS.blade_mail.icon, false },
-    { "eul", ITEM_DEFINITIONS.eul.icon, false },
-    { "wind_waker", ITEM_DEFINITIONS.wind_waker.icon, false },
-    { "force", ITEM_DEFINITIONS.force.icon, false },
-    { "hurricane", ITEM_DEFINITIONS.hurricane.icon, false },
-    { "disperser", ITEM_DEFINITIONS.disperser.icon, false },
-    { "pipe", ITEM_DEFINITIONS.pipe.icon, false },
-    { "ethereal", ITEM_DEFINITIONS.ethereal.icon, false },
-    { "nullifier", ITEM_DEFINITIONS.nullifier.icon, false },
-    { "dagon", ITEM_DEFINITIONS.dagon.icon, false },
-    { "blood_grenade", ITEM_DEFINITIONS.blood_grenade.icon, false },
-    { "halberd", ITEM_DEFINITIONS.halberd.icon, false },
-    { "urn", ITEM_DEFINITIONS.urn.icon, false },
-    { "spirit_vessel", ITEM_DEFINITIONS.spirit_vessel.icon, false },
-    { "blink", ITEM_DEFINITIONS.blink.icon, false },
-    { "overwhelming_blink", ITEM_DEFINITIONS.overwhelming_blink.icon, false },
-    { "swift_blink", ITEM_DEFINITIONS.swift_blink.icon, false },
-    { "arcane_blink", ITEM_DEFINITIONS.arcane_blink.icon, false },
-    { "solar_crest", ITEM_DEFINITIONS.solar_crest.icon, false },
-    { "drums", ITEM_DEFINITIONS.drums.icon, false },
-    { "boots_of_bearing", ITEM_DEFINITIONS.boots_of_bearing.icon, false },
-    { "atos", ITEM_DEFINITIONS.atos.icon, false },
-    { "hex", ITEM_DEFINITIONS.hex.icon, false },
-    { "abyssal", ITEM_DEFINITIONS.abyssal.icon, false },
-    { "bloodthorn", ITEM_DEFINITIONS.bloodthorn.icon, false },
-    { "diffusal", ITEM_DEFINITIONS.diffusal.icon, false },
-    { "gleipnir", ITEM_DEFINITIONS.gleipnir.icon, false },
-    { "silver", ITEM_DEFINITIONS.silver.icon, false },
-    { "shadow_blade", ITEM_DEFINITIONS.shadow_blade.icon, false },
+local priority_defaults = {
+    glimmer = true,
+    ghost = true,
+    bkb = true,
 }
+
+local priority_keys = {
+    "glimmer",
+    "ghost",
+    "bkb",
+    "lotus",
+    "crimson",
+    "shivas",
+    "blade_mail",
+    "satanic",
+    "mjollnir",
+    "eul",
+    "wind_waker",
+    "force",
+    "hurricane",
+    "disperser",
+    "pipe",
+    "ethereal",
+    "nullifier",
+    "dagon",
+    "blood_grenade",
+    "halberd",
+    "urn",
+    "spirit_vessel",
+    "blink",
+    "overwhelming_blink",
+    "swift_blink",
+    "arcane_blink",
+    "solar_crest",
+    "pavise",
+    "drums",
+    "boots_of_bearing",
+    "atos",
+    "hex",
+    "abyssal",
+    "bloodthorn",
+    "orchid",
+    "diffusal",
+    "silver",
+    "shadow_blade",
+}
+
+local DEFAULT_ICON_PATH = "panorama/images/items/emptyitembg_png.vtex_c"
+
+local function resolve_item_icon(definition)
+    local icon = definition.icon
+    if type(icon) == "string" and icon ~= "" then
+        return icon
+    end
+
+    local source = definition.item_name
+    if not source then
+        local names = definition.item_names
+        if type(names) == "table" and #names > 0 then
+            source = names[1]
+        end
+    end
+
+    if type(source) == "string" then
+        local prefix = "item_"
+        if source:sub(1, #prefix) == prefix then
+            source = source:sub(#prefix + 1)
+        end
+
+        if source ~= "" then
+            return string.format("panorama/images/items/%s_png.vtex_c", source)
+        end
+    end
+
+    return DEFAULT_ICON_PATH
+end
+
+local function apply_widget_icon(widget, icon_path)
+    if not widget or type(icon_path) ~= "string" or icon_path == "" then
+        return
+    end
+
+    local setters = {
+        "SetImage",
+        "SetIcon",
+        "SetTexture",
+        "SetTextureID",
+    }
+
+    for i = 1, #setters do
+        local name = setters[i]
+        local setter = widget[name]
+        if type(setter) == "function" then
+            setter(widget, icon_path)
+            return
+        end
+    end
+
+    if type(widget.Image) == "function" then
+        widget:Image(icon_path)
+    elseif type(widget.Icon) == "function" then
+        widget:Icon(icon_path)
+    end
+end
+
+local priority_items = {}
+for _, key in ipairs(priority_keys) do
+    local definition = ITEM_DEFINITIONS[key]
+    if definition then
+        priority_items[#priority_items + 1] = {
+            key,
+            resolve_item_icon(definition),
+            priority_defaults[key] or false,
+        }
+    end
+end
 
 local priority_widget = priority_group:MultiSelect("Items", priority_items, true)
 priority_widget:DragAllowed(true)
 priority_widget:ToolTip("Drag to reorder priority. Enable items you want to use.")
 
+local priority_order = {}
 local item_thresholds = {}
+local item_enemy_ranges = {}
+
+local priority_delay_slider = priority_group:Slider(
+    "Delay After Successful Cast (ms)",
+    0,
+    5000,
+    0,
+    function(value)
+        return string.format("%.2fs", value / 1000.0)
+    end
+)
+
+local DEFAULT_SEARCH_RANGE = 1200
+
+local function refresh_priority_order()
+    local ordered = {}
+
+    if priority_widget and priority_widget.List then
+        local list = priority_widget:List()
+
+        if type(list) == "table" then
+            local count = #list
+            if count and count > 0 then
+                for i = 1, count do
+                    local key = list[i]
+                    if type(key) == "string" then
+                        ordered[#ordered + 1] = key
+                    end
+                end
+            end
+
+            if #ordered == 0 then
+                local indexed = {}
+
+                for key, value in pairs(list) do
+                    if type(key) == "number" then
+                        indexed[#indexed + 1] = { index = key, value = value }
+                    end
+                end
+
+                if #indexed > 0 then
+                    table.sort(indexed, function(a, b)
+                        return a.index < b.index
+                    end)
+
+                    for _, entry in ipairs(indexed) do
+                        if type(entry.value) == "string" then
+                            ordered[#ordered + 1] = entry.value
+                        elseif type(entry.value) == "table" then
+                            local first = entry.value[1]
+                            if type(first) == "string" then
+                                ordered[#ordered + 1] = first
+                            elseif type(entry.value.key) == "string" then
+                                ordered[#ordered + 1] = entry.value.key
+                            end
+                        end
+                    end
+                end
+            end
+
+            if #ordered == 0 then
+                local seen = {}
+
+                for _, item in ipairs(priority_items) do
+                    seen[item[1]] = true
+                end
+
+                for _, value in pairs(list) do
+                    if type(value) == "string" and seen[value] then
+                        ordered[#ordered + 1] = value
+                        seen[value] = nil
+                    elseif type(value) == "table" then
+                        local key = value.key or value[1]
+                        if type(key) == "string" and seen[key] then
+                            ordered[#ordered + 1] = key
+                            seen[key] = nil
+                        end
+                    end
+                end
+
+                for _, item in ipairs(priority_items) do
+                    local key = item[1]
+                    if seen[key] then
+                        ordered[#ordered + 1] = key
+                    end
+                end
+            end
+        end
+    end
+
+    if #ordered == 0 then
+        for _, item in ipairs(priority_items) do
+            ordered[#ordered + 1] = item[1]
+        end
+    end
+
+    priority_order = ordered
+end
+
+refresh_priority_order()
+
+if priority_widget then
+    if priority_widget.RegisterCallback then
+        priority_widget:RegisterCallback(function()
+            refresh_priority_order()
+        end)
+    end
+
+    if priority_widget.RegisterDragCallback then
+        priority_widget:RegisterDragCallback(function(order)
+            if type(order) == "table" and #order > 0 then
+                local copied = {}
+
+                for i = 1, #order do
+                    local key = order[i]
+                    if type(key) == "string" then
+                        copied[#copied + 1] = key
+                    end
+                end
+
+                if #copied > 0 then
+                    priority_order = copied
+                    return
+                end
+            end
+
+            refresh_priority_order()
+        end)
+    end
+end
 
 for _, item in ipairs(priority_items) do
     local key = item[1]
     local definition = ITEM_DEFINITIONS[key]
     if definition then
+        local threshold_label = string.format("%s (%%)", definition.display_name)
         item_thresholds[key] = threshold_group:Slider(
-            definition.display_name,
+            threshold_label,
             1,
             100,
             50,
@@ -354,19 +621,46 @@ for _, item in ipairs(priority_items) do
                 return string.format("%d%%", value)
             end
         )
+        apply_widget_icon(item_thresholds[key], resolve_item_icon(definition))
+
+        local needs_enemy_range =
+            definition.type == "target_enemy"
+            or definition.type == "position_enemy"
+            or definition.type == "escape_position"
+            or definition.requires_enemy
+
+        if needs_enemy_range then
+            local default_range = definition.range or definition.search_range or DEFAULT_SEARCH_RANGE
+            if not default_range or default_range <= 0 then
+                default_range = DEFAULT_SEARCH_RANGE
+            end
+
+            item_enemy_ranges[key] = enemy_range_group:Slider(
+                definition.display_name,
+                100,
+                3000,
+                math.floor(default_range + 0.5),
+                function(value)
+                    return string.format("%d units", value)
+                end
+            )
+            apply_widget_icon(item_enemy_ranges[key], resolve_item_icon(definition))
+        end
     end
 end
 
 local CAST_COOLDOWN = 0.2
 local last_cast_times = {}
+local next_cast_available_time = 0.0
+
+local CAST_RESULT_NONE = 0
+local CAST_RESULT_CAST = 1
 
 local CONTROL_BLOCKERS = {
     Enum.ModifierState.MODIFIER_STATE_STUNNED,
     Enum.ModifierState.MODIFIER_STATE_HEXED,
     Enum.ModifierState.MODIFIER_STATE_MUTED,
 }
-
-local DEFAULT_SEARCH_RANGE = 1200
 
 local function can_use_item(hero)
     if not Entity.IsAlive(hero) then
@@ -395,12 +689,27 @@ local function mark_cast(item_id, game_time)
 end
 
 local function get_enabled_items()
-    local ordered = priority_widget:List()
-    local enabled = {}
+    refresh_priority_order()
 
-    for _, key in ipairs(ordered) do
-        if priority_widget:Get(key) then
-            enabled[#enabled + 1] = key
+    local enabled = {}
+    local seen = {}
+
+    for _, key in ipairs(priority_order) do
+        if not seen[key] then
+            seen[key] = true
+            if priority_widget:Get(key) then
+                enabled[#enabled + 1] = key
+            end
+        end
+    end
+
+    for _, item in ipairs(priority_items) do
+        local key = item[1]
+        if not seen[key] then
+            seen[key] = true
+            if priority_widget:Get(key) then
+                enabled[#enabled + 1] = key
+            end
         end
     end
 
@@ -446,8 +755,28 @@ local function get_effective_cast_range(hero, ability, definition)
     return range
 end
 
-local function find_enemy_target(hero, ability, definition)
+local function get_enemy_search_range(hero, ability, definition, item_key)
     local range = get_effective_cast_range(hero, ability, definition)
+
+    if item_key then
+        local slider = item_enemy_ranges[item_key]
+        if slider then
+            local configured = slider:Get()
+            if configured and configured > 0 then
+                if range <= 0 then
+                    range = configured
+                else
+                    range = math.min(range, configured)
+                end
+            end
+        end
+    end
+
+    return range
+end
+
+local function find_enemy_target(hero, ability, definition, item_key)
+    local range = get_enemy_search_range(hero, ability, definition, item_key)
     if range <= 0 then
         return nil
     end
@@ -534,50 +863,13 @@ local function normalize_flat_vector(vector)
     return vector
 end
 
-local function face_direction(hero, direction)
-    if not hero or not direction then
-        return
-    end
-
-    local hero_pos = Entity.GetAbsOrigin(hero)
-    if not hero_pos then
-        return
-    end
-
-    if not Players or not Player or not Player.PrepareUnitOrders or not Players.GetLocal then
-        return
-    end
-
-    local player = Players.GetLocal()
-    if not player then
-        return
-    end
-
-    local move_target = hero_pos + direction * 50
-    move_target.z = hero_pos.z
-    Player.PrepareUnitOrders(
-        player,
-        Enum.UnitOrder.DOTA_UNIT_ORDER_MOVE_TO_POSITION,
-        nil,
-        move_target,
-        nil,
-        Enum.PlayerOrderIssuer.DOTA_ORDER_ISSUER_HERO_ONLY,
-        hero,
-        false,
-        false
-    )
-end
-
-local function get_escape_direction(hero, ability, definition)
+local function get_escape_direction(hero, ability, definition, item_key)
     local hero_pos = Entity.GetAbsOrigin(hero)
     if not hero_pos then
         return nil, nil
     end
 
-    local search_range = definition and definition.search_range or DEFAULT_SEARCH_RANGE
-    if ability then
-        search_range = math.max(search_range, get_effective_cast_range(hero, ability, definition))
-    end
+    local search_range = get_enemy_search_range(hero, ability, definition, item_key)
 
     local enemy = find_closest_enemy(hero, search_range)
     if not enemy then
@@ -599,79 +891,50 @@ local function get_escape_direction(hero, ability, definition)
     return direction, enemy
 end
 
-local ESCAPE_TURN_DELAY = 0.2
-local pending_escape_casts = {}
-
-local function clear_pending_escape(item_key)
-    pending_escape_casts[item_key] = nil
-end
-
-local function needs_new_escape(direction, enemy, pending)
-    if not pending then
-        return true
-    end
-
-    if pending.enemy ~= enemy then
-        return true
-    end
-
-    local pending_dir = pending.direction
-    if not pending_dir or not direction then
-        return true
-    end
-
-    local dot = pending_dir.x * direction.x + pending_dir.y * direction.y
-    if dot < 0.95 then
-        return true
-    end
-
-    return false
-end
-
 local function cast_item(hero, item_key, game_time)
     local definition = ITEM_DEFINITIONS[item_key]
     if not definition then
-        return false
+        return CAST_RESULT_NONE
     end
 
     if is_recently_cast(item_key, game_time) then
-        return false
+        return CAST_RESULT_NONE
     end
 
     local item = get_inventory_item(hero, definition)
     if not item then
-        return false
+        return CAST_RESULT_NONE
     end
 
     if definition.modifier and NPC.HasModifier(hero, definition.modifier) then
-        return false
+        return CAST_RESULT_NONE
     end
 
     if not Ability.IsReady(item) then
-        return false
+        return CAST_RESULT_NONE
     end
 
     if definition.requires_charges then
         local charges = Ability.GetCurrentCharges(item)
         if not charges or charges <= 0 then
-            return false
+            return CAST_RESULT_NONE
         end
     end
 
     local mana = NPC.GetMana(hero)
     if not Ability.IsCastable(item, mana) then
-        return false
+        return CAST_RESULT_NONE
     end
 
     if not can_use_item(hero) then
-        return false
+        return CAST_RESULT_NONE
     end
 
     if definition.requires_enemy then
-        local range = get_effective_cast_range(hero, item, definition)
+        local range = get_enemy_search_range(hero, item, definition, item_key)
         local enemies = Entity.GetHeroesInRadius(hero, range, Enum.TeamType.TEAM_ENEMY, true, true)
         if not enemies or #enemies == 0 then
-            return false
+            return CAST_RESULT_NONE
         end
     end
 
@@ -680,62 +943,33 @@ local function cast_item(hero, item_key, game_time)
     elseif definition.type == "target_self" then
         Ability.CastTarget(item, hero)
     elseif definition.type == "target_enemy" then
-        local target = find_enemy_target(hero, item, definition)
+        local target = find_enemy_target(hero, item, definition, item_key)
         if not target then
-            return false
+            return CAST_RESULT_NONE
         end
 
         Ability.CastTarget(item, target)
     elseif definition.type == "position_enemy" then
-        local target = find_enemy_target(hero, item, definition)
+        local target = find_enemy_target(hero, item, definition, item_key)
         if not target then
-            return false
+            return CAST_RESULT_NONE
         end
 
         local target_pos = Entity.GetAbsOrigin(target)
         if not target_pos then
-            return false
+            return CAST_RESULT_NONE
         end
 
         Ability.CastPosition(item, target_pos)
-    elseif definition.type == "escape_self" then
-        local direction, enemy = get_escape_direction(hero, item, definition)
-        if not direction then
-            clear_pending_escape(item_key)
-            return false
-        end
-
-        local pending = pending_escape_casts[item_key]
-
-        if needs_new_escape(direction, enemy, pending) then
-            pending_escape_casts[item_key] = {
-                ready_time = game_time + ESCAPE_TURN_DELAY,
-                direction = direction,
-                enemy = enemy,
-            }
-            face_direction(hero, direction)
-            return false
-        end
-
-        pending.direction = direction
-
-        if game_time < pending.ready_time then
-            face_direction(hero, pending.direction)
-            return false
-        end
-
-        face_direction(hero, pending.direction)
-        Ability.CastTarget(item, hero)
-        clear_pending_escape(item_key)
     elseif definition.type == "escape_position" then
-        local direction = get_escape_direction(hero, item, definition)
+        local direction = get_escape_direction(hero, item, definition, item_key)
         if not direction then
-            return false
+            return CAST_RESULT_NONE
         end
 
         local hero_pos = Entity.GetAbsOrigin(hero)
         if not hero_pos then
-            return false
+            return CAST_RESULT_NONE
         end
 
         local distance = definition.escape_distance or get_effective_cast_range(hero, item, definition)
@@ -748,28 +982,29 @@ local function cast_item(hero, item_key, game_time)
 
         Ability.CastPosition(item, cast_position)
     else
-        return false
+        return CAST_RESULT_NONE
     end
 
     mark_cast(item_key, game_time)
 
-    return true
+    return CAST_RESULT_CAST
 end
 
 function auto_defender.OnUpdate()
     if not Engine.IsInGame() then
         last_cast_times = {}
-        pending_escape_casts = {}
+        next_cast_available_time = 0.0
         return
     end
 
     if not ui.enable:Get() then
+        next_cast_available_time = 0.0
         return
     end
 
     local hero = Heroes.GetLocal()
     if not hero or NPC.IsIllusion(hero) or not Entity.IsAlive(hero) or Entity.IsDormant(hero) then
-        pending_escape_casts = {}
+        next_cast_available_time = 0.0
         return
     end
 
@@ -782,6 +1017,10 @@ function auto_defender.OnUpdate()
     local health_percent = (current_health / max_health) * 100.0
 
     local game_time = GameRules.GetGameTime()
+
+    if next_cast_available_time > game_time then
+        return
+    end
     local items_to_use = get_enabled_items()
 
     if #items_to_use == 0 then
@@ -791,14 +1030,28 @@ function auto_defender.OnUpdate()
     for _, key in ipairs(items_to_use) do
         local threshold_slider = item_thresholds[key]
         if threshold_slider and health_percent <= threshold_slider:Get() then
-            cast_item(hero, key, game_time)
+            local result = cast_item(hero, key, game_time)
+
+            if result == CAST_RESULT_CAST then
+                if priority_delay_slider then
+                    local delay_ms = priority_delay_slider:Get()
+                    if delay_ms and delay_ms > 0 then
+                        next_cast_available_time = game_time + (delay_ms / 1000.0)
+                    else
+                        next_cast_available_time = 0.0
+                    end
+                else
+                    next_cast_available_time = 0.0
+                end
+                break
+            end
         end
     end
 end
 
 function auto_defender.OnGameEnd()
     last_cast_times = {}
-    pending_escape_casts = {}
+    next_cast_available_time = 0.0
 end
 
 return auto_defender
