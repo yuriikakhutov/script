@@ -760,20 +760,6 @@ local function normalize_flat_vector(vector)
     return vector
 end
 
-local function is_channelling(hero)
-    if not hero or not NPC or not NPC.IsChannellingAbility then
-        return false
-    end
-
-    return NPC.IsChannellingAbility(hero)
-end
-
-local ESCAPE_DEFAULT_BLOCK_DURATION = 0.45
-local ESCAPE_POST_CAST_BLOCK_DURATION = 0.6
-local ESCAPE_STOP_COOLDOWN = 0.05
-local escape_block_end_time = 0
-local escape_last_stop_time = 0
-local allowed_escape_sequences = {}
 local ESCAPE_ORDER_IDENTIFIER = "auto_defender_escape"
 
 local function get_escape_direction(hero, ability, definition, item_key)
@@ -804,188 +790,9 @@ local function get_escape_direction(hero, ability, definition, item_key)
     return direction, enemy
 end
 
-local function is_escape_blocking(game_time)
-    if not game_time then
-        return false
-    end
-
-    return game_time < escape_block_end_time
-end
-
-local function issue_stop_order(hero, game_time)
-    if not hero or is_channelling(hero) then
-        return
-    end
-
-    if not game_time then
-        return
-    end
-
-    if game_time < escape_last_stop_time + ESCAPE_STOP_COOLDOWN then
-        return
-    end
-
-    if not Players or not Player or not Player.PrepareUnitOrders or not Players.GetLocal then
-        return
-    end
-
-    local player = Players.GetLocal()
-    if not player then
-        return
-    end
-
-    Player.PrepareUnitOrders(
-        player,
-        Enum.UnitOrder.DOTA_UNIT_ORDER_STOP,
-        nil,
-        nil,
-        nil,
-        Enum.PlayerOrderIssuer.DOTA_ORDER_ISSUER_HERO_ONLY,
-        hero,
-        false,
-        false,
-        false,
-        false,
-        ESCAPE_ORDER_IDENTIFIER
-    )
-
-    escape_last_stop_time = game_time
-end
-
-local function activate_escape_block(hero, game_time, duration)
-    if not game_time then
-        return
-    end
-
-    local block_duration = duration
-    if not block_duration or block_duration <= 0 then
-        block_duration = ESCAPE_DEFAULT_BLOCK_DURATION
-    end
-
-    local block_until = game_time + block_duration
-    if block_until > escape_block_end_time then
-        escape_block_end_time = block_until
-    end
-
-    issue_stop_order(hero, game_time)
-end
-
-local function clear_escape_block()
-    escape_block_end_time = 0
-    escape_last_stop_time = 0
-    allowed_escape_sequences = {}
-end
-
-local function does_order_include_hero(data, hero)
-    if not data or not hero then
-        return false
-    end
-
-    if data.npc == hero then
-        return true
-    end
-
-    local units = data.units
-    if not units then
-        return false
-    end
-
-    if type(units) == "table" then
-        for _, unit in pairs(units) do
-            if unit == hero then
-                return true
-            end
-        end
-        return false
-    end
-
-    local get_length = units.GetLength or units.Length or units.Count or units.Size
-    local get_value = units.Get or units.GetValue or units.At or units.GetByIndex
-    if get_length and get_value then
-        local length = get_length(units)
-        if length then
-            for i = 1, length do
-                local unit = get_value(units, i)
-                if not unit and i == 1 then
-                    unit = get_value(units, 0)
-                end
-                if unit == hero then
-                    return true
-                end
-            end
-        end
-    end
-
-    return false
-end
-
-local function should_block_order(data)
-    if not data or data.identifier == ESCAPE_ORDER_IDENTIFIER then
-        return false
-    end
-
-    if not Engine.IsInGame() then
-        return false
-    end
-
-    if not ui.enable or not ui.enable:Get() then
-        return false
-    end
-
-    local hero = Heroes.GetLocal()
-    if not hero or not does_order_include_hero(data, hero) then
-        return false
-    end
-
-    local game_time = GameRules.GetGameTime()
-    if not game_time then
-        return false
-    end
-
-    local blocking = is_escape_blocking(game_time)
-    return blocking
-end
-
-function auto_defender.OnPrepareUnitOrders(data)
-    if data and data.identifier == ESCAPE_ORDER_IDENTIFIER and data.sequenceNumber then
-        allowed_escape_sequences[data.sequenceNumber] = true
-    end
-
-    if should_block_order(data) then
-        return false
-    end
-
-    return true
-end
-
-function auto_defender.OnExecuteOrder(data)
-    if data and data.identifier == ESCAPE_ORDER_IDENTIFIER then
-        if data.sequenceNumber then
-            allowed_escape_sequences[data.sequenceNumber] = nil
-        end
-        return true
-    end
-
-    if data and data.sequenceNumber and allowed_escape_sequences[data.sequenceNumber] then
-        allowed_escape_sequences[data.sequenceNumber] = nil
-        return true
-    end
-
-    if should_block_order(data) then
-        return false
-    end
-
-    return true
-end
-
 local function cast_item(hero, item_key, game_time)
     local definition = ITEM_DEFINITIONS[item_key]
     if not definition then
-        return false
-    end
-
-    local blocking = is_escape_blocking(game_time)
-    if blocking and definition.type ~= "escape_self" then
         return false
     end
 
@@ -1060,7 +867,6 @@ local function cast_item(hero, item_key, game_time)
         end
 
         Ability.CastTarget(item, hero, false, false, false, ESCAPE_ORDER_IDENTIFIER)
-        activate_escape_block(hero, game_time, ESCAPE_POST_CAST_BLOCK_DURATION)
     elseif definition.type == "escape_position" then
         local direction = get_escape_direction(hero, item, definition, item_key)
         if not direction then
@@ -1081,7 +887,6 @@ local function cast_item(hero, item_key, game_time)
         cast_position.z = hero_pos.z
 
         Ability.CastPosition(item, cast_position, false, false, false, ESCAPE_ORDER_IDENTIFIER)
-        activate_escape_block(hero, game_time, ESCAPE_POST_CAST_BLOCK_DURATION)
     else
         return false
     end
@@ -1094,18 +899,15 @@ end
 function auto_defender.OnUpdate()
     if not Engine.IsInGame() then
         last_cast_times = {}
-        clear_escape_block()
         return
     end
 
     if not ui.enable:Get() then
-        clear_escape_block()
         return
     end
 
     local hero = Heroes.GetLocal()
     if not hero or NPC.IsIllusion(hero) or not Entity.IsAlive(hero) or Entity.IsDormant(hero) then
-        clear_escape_block()
         return
     end
 
@@ -1118,11 +920,6 @@ function auto_defender.OnUpdate()
     local health_percent = (current_health / max_health) * 100.0
 
     local game_time = GameRules.GetGameTime()
-    local blocking = is_escape_blocking(game_time)
-    if blocking then
-        issue_stop_order(hero, game_time)
-    end
-
     local items_to_use = get_enabled_items()
 
     if #items_to_use == 0 then
@@ -1141,7 +938,6 @@ end
 
 function auto_defender.OnGameEnd()
     last_cast_times = {}
-    clear_escape_block()
 end
 
 return auto_defender
