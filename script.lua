@@ -51,6 +51,8 @@ local ITEM_DEFINITIONS = {
         display_name = "Black King Bar",
         type = "no_target",
         modifier = "modifier_black_king_bar_immune",
+        requires_enemy = true,
+        search_range = 1200,
     },
     lotus = {
         item_name = "item_lotus_orb",
