@@ -279,6 +279,7 @@ local function InitializeUI()
         end
 
         apply_compact_style(group)
+        disable_interface_scale(group)
 
         return group
     end
