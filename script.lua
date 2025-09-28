@@ -26,7 +26,7 @@ local function call_widget_method(widget, method_name, ...)
     return ok and true or false
 end
 
-local COMPACT_WIDGET_SCALE = 0.85
+local COMPACT_WIDGET_SCALE = 0.7
 
 local function apply_compact_style(widget)
     if not widget then
