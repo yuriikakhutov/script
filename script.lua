@@ -74,6 +74,15 @@ local ITEM_DEFINITIONS = {
         requires_enemy = true,
         search_range = 1200,
     },
+    shivas = {
+        item_name = "item_shivas_guard",
+        icon = "panorama/images/items/shivas_guard_png.vtex_c",
+        display_name = "Shiva's Guard",
+        type = "no_target",
+        modifier = "modifier_item_shivas_guard_active",
+        requires_enemy = true,
+        search_range = 1200,
+    },
     blade_mail = {
         item_name = "item_blade_mail",
         icon = "panorama/images/items/blade_mail_png.vtex_c",
@@ -349,6 +358,7 @@ local priority_items = {
     { "bkb", ITEM_DEFINITIONS.bkb.icon, true },
     { "lotus", ITEM_DEFINITIONS.lotus.icon, false },
     { "crimson", ITEM_DEFINITIONS.crimson.icon, false },
+    { "shivas", ITEM_DEFINITIONS.shivas.icon, false },
     { "blade_mail", ITEM_DEFINITIONS.blade_mail.icon, false },
     { "mjollnir", ITEM_DEFINITIONS.mjollnir.icon, false },
     { "eul", ITEM_DEFINITIONS.eul.icon, false },
