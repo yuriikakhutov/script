@@ -1254,8 +1254,8 @@ local function cast_item(hero, item_key, game_time)
         local cast_position = hero_pos + direction * distance
         cast_position.z = hero_pos.z
 
-        activate_escape_block(hero, game_time, ESCAPE_POST_CAST_BLOCK_DURATION)
         Ability.CastPosition(item, cast_position, false, false, false, ESCAPE_ORDER_IDENTIFIER)
+        activate_escape_block(hero, game_time, ESCAPE_POST_CAST_BLOCK_DURATION)
     else
         return false
     end
