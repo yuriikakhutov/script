@@ -623,7 +623,10 @@ local function face_direction(hero, direction)
         Enum.PlayerOrderIssuer.DOTA_ORDER_ISSUER_HERO_ONLY,
         hero,
         false,
-        false
+        false,
+        false,
+        false,
+        ESCAPE_ORDER_IDENTIFIER
     )
 end
 
@@ -666,6 +669,7 @@ local ESCAPE_STOP_COOLDOWN = 0.05
 local escape_block_end_time = 0
 local escape_last_stop_time = 0
 local pending_escape_casts = {}
+local ESCAPE_ORDER_IDENTIFIER = "auto_defender_escape"
 
 local function clear_pending_escape(item_key)
     pending_escape_casts[item_key] = nil
@@ -728,7 +732,10 @@ local function issue_stop_order(hero, game_time)
         Enum.PlayerOrderIssuer.DOTA_ORDER_ISSUER_HERO_ONLY,
         hero,
         false,
-        false
+        false,
+        false,
+        false,
+        ESCAPE_ORDER_IDENTIFIER
     )
 
     escape_last_stop_time = game_time
@@ -755,6 +762,40 @@ end
 local function clear_escape_block()
     escape_block_end_time = 0
     escape_last_stop_time = 0
+end
+
+local function should_block_order(data)
+    if not data or data.identifier == ESCAPE_ORDER_IDENTIFIER then
+        return false
+    end
+
+    if not Engine.IsInGame() then
+        return false
+    end
+
+    if not ui.enable or not ui.enable:Get() then
+        return false
+    end
+
+    local hero = Heroes.GetLocal()
+    if not hero or data.npc ~= hero then
+        return false
+    end
+
+    local game_time = GameRules.GetGameTime()
+    if not game_time then
+        return false
+    end
+
+    return is_escape_blocking(game_time)
+end
+
+function auto_defender.OnPrepareUnitOrders(data)
+    if should_block_order(data) then
+        return false
+    end
+
+    return true
 end
 
 local function cast_item(hero, item_key, game_time)
@@ -809,16 +850,16 @@ local function cast_item(hero, item_key, game_time)
     end
 
     if definition.type == "no_target" then
-        Ability.CastNoTarget(item)
+        Ability.CastNoTarget(item, false, false, false, ESCAPE_ORDER_IDENTIFIER)
     elseif definition.type == "target_self" then
-        Ability.CastTarget(item, hero)
+        Ability.CastTarget(item, hero, false, false, false, ESCAPE_ORDER_IDENTIFIER)
     elseif definition.type == "target_enemy" then
         local target = find_enemy_target(hero, item, definition, item_key)
         if not target then
             return false
         end
 
-        Ability.CastTarget(item, target)
+        Ability.CastTarget(item, target, false, false, false, ESCAPE_ORDER_IDENTIFIER)
     elseif definition.type == "position_enemy" then
         local target = find_enemy_target(hero, item, definition, item_key)
         if not target then
@@ -830,7 +871,7 @@ local function cast_item(hero, item_key, game_time)
             return false
         end
 
-        Ability.CastPosition(item, target_pos)
+        Ability.CastPosition(item, target_pos, false, false, false, ESCAPE_ORDER_IDENTIFIER)
     elseif definition.type == "escape_self" then
         local direction, enemy = get_escape_direction(hero, item, definition, item_key)
         if not direction then
@@ -866,7 +907,7 @@ local function cast_item(hero, item_key, game_time)
         if not is_channelling(hero) then
             face_direction(hero, pending.direction)
         end
-        Ability.CastTarget(item, hero)
+        Ability.CastTarget(item, hero, false, false, false, ESCAPE_ORDER_IDENTIFIER)
         activate_escape_block(hero, game_time, ESCAPE_POST_CAST_BLOCK_DURATION)
         clear_pending_escape(item_key)
     elseif definition.type == "escape_position" then
@@ -888,7 +929,7 @@ local function cast_item(hero, item_key, game_time)
         local cast_position = hero_pos + direction * distance
         cast_position.z = hero_pos.z
 
-        Ability.CastPosition(item, cast_position)
+        Ability.CastPosition(item, cast_position, false, false, false, ESCAPE_ORDER_IDENTIFIER)
     else
         return false
     end
