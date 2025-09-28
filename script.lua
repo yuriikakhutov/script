@@ -656,6 +656,11 @@ local function get_escape_direction(hero, ability, definition, item_key)
 end
 
 local ESCAPE_TURN_DELAY = 0.2
+local ESCAPE_PREP_BLOCK_DURATION = 0.45
+local ESCAPE_POST_CAST_BLOCK_DURATION = 0.6
+local ESCAPE_STOP_COOLDOWN = 0.05
+local escape_block_end_time = 0
+local escape_last_stop_time = 0
 local pending_escape_casts = {}
 
 local function clear_pending_escape(item_key)
@@ -684,9 +689,77 @@ local function needs_new_escape(direction, enemy, pending)
     return false
 end
 
+local function is_escape_blocking(game_time)
+    return game_time and game_time < escape_block_end_time
+end
+
+local function issue_stop_order(hero, game_time)
+    if not hero or is_channelling(hero) then
+        return
+    end
+
+    if not game_time then
+        return
+    end
+
+    if game_time < escape_last_stop_time + ESCAPE_STOP_COOLDOWN then
+        return
+    end
+
+    if not Players or not Player or not Player.PrepareUnitOrders or not Players.GetLocal then
+        return
+    end
+
+    local player = Players.GetLocal()
+    if not player then
+        return
+    end
+
+    Player.PrepareUnitOrders(
+        player,
+        Enum.UnitOrder.DOTA_UNIT_ORDER_STOP,
+        nil,
+        nil,
+        nil,
+        Enum.PlayerOrderIssuer.DOTA_ORDER_ISSUER_HERO_ONLY,
+        hero,
+        false,
+        false
+    )
+
+    escape_last_stop_time = game_time
+end
+
+local function activate_escape_block(hero, game_time, duration)
+    if not game_time then
+        return
+    end
+
+    local block_duration = duration
+    if not block_duration or block_duration <= 0 then
+        block_duration = ESCAPE_PREP_BLOCK_DURATION
+    end
+
+    local block_until = game_time + block_duration
+    if block_until > escape_block_end_time then
+        escape_block_end_time = block_until
+    end
+
+    issue_stop_order(hero, game_time)
+end
+
+local function clear_escape_block()
+    escape_block_end_time = 0
+    escape_last_stop_time = 0
+end
+
 local function cast_item(hero, item_key, game_time)
     local definition = ITEM_DEFINITIONS[item_key]
     if not definition then
+        return false
+    end
+
+    if is_escape_blocking(game_time) and definition.type ~= "escape_self" then
         return false
     end
 
@@ -769,6 +842,7 @@ local function cast_item(hero, item_key, game_time)
                 direction = direction,
                 enemy = enemy,
             }
+            activate_escape_block(hero, game_time, ESCAPE_PREP_BLOCK_DURATION + ESCAPE_TURN_DELAY)
             if not is_channelling(hero) then
                 face_direction(hero, direction)
             end
@@ -776,6 +850,7 @@ local function cast_item(hero, item_key, game_time)
         end
 
         pending.direction = direction
+        activate_escape_block(hero, game_time, ESCAPE_PREP_BLOCK_DURATION)
 
         if game_time < pending.ready_time then
             if not is_channelling(hero) then
@@ -788,6 +863,7 @@ local function cast_item(hero, item_key, game_time)
             face_direction(hero, pending.direction)
         end
         Ability.CastTarget(item, hero)
+        activate_escape_block(hero, game_time, ESCAPE_POST_CAST_BLOCK_DURATION)
         clear_pending_escape(item_key)
     elseif definition.type == "escape_position" then
         local direction = get_escape_direction(hero, item, definition, item_key)
@@ -822,16 +898,19 @@ function auto_defender.OnUpdate()
     if not Engine.IsInGame() then
         last_cast_times = {}
         pending_escape_casts = {}
+        clear_escape_block()
         return
     end
 
     if not ui.enable:Get() then
+        clear_escape_block()
         return
     end
 
     local hero = Heroes.GetLocal()
     if not hero or NPC.IsIllusion(hero) or not Entity.IsAlive(hero) or Entity.IsDormant(hero) then
         pending_escape_casts = {}
+        clear_escape_block()
         return
     end
 
@@ -861,6 +940,7 @@ end
 function auto_defender.OnGameEnd()
     last_cast_times = {}
     pending_escape_casts = {}
+    clear_escape_block()
 end
 
 return auto_defender
