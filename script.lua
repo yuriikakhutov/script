@@ -44,6 +44,8 @@ local ITEM_DEFINITIONS = {
         display_name = "Ghost Scepter",
         type = "no_target",
         modifier = "modifier_ghost_state",
+        requires_enemy = true,
+        search_range = 1200,
     },
     bkb = {
         item_name = "item_black_king_bar",
@@ -60,6 +62,8 @@ local ITEM_DEFINITIONS = {
         display_name = "Lotus Orb",
         type = "target_self",
         modifier = "modifier_item_lotus_orb_active",
+        requires_enemy = true,
+        search_range = 1200,
     },
     crimson = {
         item_name = "item_crimson_guard",
@@ -67,6 +71,8 @@ local ITEM_DEFINITIONS = {
         display_name = "Crimson Guard",
         type = "no_target",
         modifier = "modifier_item_crimson_guard_extra",
+        requires_enemy = true,
+        search_range = 1200,
     },
     blade_mail = {
         item_name = "item_blade_mail",
@@ -81,6 +87,8 @@ local ITEM_DEFINITIONS = {
         display_name = "Eul's Scepter",
         type = "target_self",
         modifier = "modifier_eul_cyclone",
+        requires_enemy = true,
+        search_range = 1200,
     },
     wind_waker = {
         item_name = "item_wind_waker",
@@ -88,6 +96,8 @@ local ITEM_DEFINITIONS = {
         display_name = "Wind Waker",
         type = "target_self",
         modifier = "modifier_wind_waker_cyclone",
+        requires_enemy = true,
+        search_range = 1200,
     },
     force = {
         item_name = "item_force_staff",
@@ -192,6 +202,8 @@ local ITEM_DEFINITIONS = {
         display_name = "Pipe of Insight",
         type = "no_target",
         modifier = "modifier_item_pipe_barrier",
+        requires_enemy = true,
+        search_range = 1200,
     },
     ethereal = {
         item_name = "item_ethereal_blade",
@@ -199,6 +211,8 @@ local ITEM_DEFINITIONS = {
         display_name = "Ethereal Blade",
         type = "target_self",
         modifier = "modifier_item_ethereal_blade_ethereal",
+        requires_enemy = true,
+        search_range = 1200,
     },
     nullifier = {
         item_name = "item_nullifier",
@@ -292,6 +306,17 @@ local ITEM_DEFINITIONS = {
         display_name = "Solar Crest",
         type = "target_self",
         modifier = "modifier_item_solar_crest_armor_addition",
+        requires_enemy = true,
+        search_range = 1200,
+    },
+    pavise = {
+        item_name = "item_pavise",
+        icon = "panorama/images/items/pavise_png.vtex_c",
+        display_name = "Pavise",
+        type = "target_self",
+        modifier = "modifier_item_pavise_barrier",
+        requires_enemy = true,
+        search_range = 1200,
     },
     drums = {
         item_name = "item_ancient_janggo",
@@ -306,6 +331,8 @@ local ITEM_DEFINITIONS = {
         display_name = "Boots of Bearing",
         type = "no_target",
         modifier = "modifier_item_boots_of_bearing_active",
+        requires_enemy = true,
+        search_range = 1200,
     },
 }
 
@@ -334,6 +361,7 @@ local priority_items = {
     { "swift_blink", ITEM_DEFINITIONS.swift_blink.icon, false },
     { "arcane_blink", ITEM_DEFINITIONS.arcane_blink.icon, false },
     { "solar_crest", ITEM_DEFINITIONS.solar_crest.icon, false },
+    { "pavise", ITEM_DEFINITIONS.pavise.icon, false },
     { "drums", ITEM_DEFINITIONS.drums.icon, false },
     { "boots_of_bearing", ITEM_DEFINITIONS.boots_of_bearing.icon, false },
     { "atos", ITEM_DEFINITIONS.atos.icon, false },
