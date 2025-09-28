@@ -105,10 +105,8 @@ local ITEM_DEFINITIONS = {
         item_name = "item_mjollnir",
         icon = "panorama/images/items/mjollnir_png.vtex_c",
         display_name = "Mjollnir",
-        type = "no_target",
+        type = "target_self",
         modifier = "modifier_item_mjollnir_shield",
-        requires_enemy = true,
-        search_range = 1200,
     },
     eul = {
         item_name = "item_cyclone",
@@ -365,47 +363,65 @@ local ITEM_DEFINITIONS = {
     },
 }
 
-local priority_items = {
-    { "glimmer", ITEM_DEFINITIONS.glimmer.icon, true },
-    { "ghost", ITEM_DEFINITIONS.ghost.icon, true },
-    { "bkb", ITEM_DEFINITIONS.bkb.icon, true },
-    { "lotus", ITEM_DEFINITIONS.lotus.icon, false },
-    { "crimson", ITEM_DEFINITIONS.crimson.icon, false },
-    { "shivas", ITEM_DEFINITIONS.shivas.icon, false },
-    { "blade_mail", ITEM_DEFINITIONS.blade_mail.icon, false },
-    { "satanic", ITEM_DEFINITIONS.satanic.icon, false },
-    { "mjollnir", ITEM_DEFINITIONS.mjollnir.icon, false },
-    { "eul", ITEM_DEFINITIONS.eul.icon, false },
-    { "wind_waker", ITEM_DEFINITIONS.wind_waker.icon, false },
-    { "force", ITEM_DEFINITIONS.force.icon, false },
-    { "hurricane", ITEM_DEFINITIONS.hurricane.icon, false },
-    { "disperser", ITEM_DEFINITIONS.disperser.icon, false },
-    { "pipe", ITEM_DEFINITIONS.pipe.icon, false },
-    { "ethereal", ITEM_DEFINITIONS.ethereal.icon, false },
-    { "nullifier", ITEM_DEFINITIONS.nullifier.icon, false },
-    { "dagon", ITEM_DEFINITIONS.dagon.icon, false },
-    { "blood_grenade", ITEM_DEFINITIONS.blood_grenade.icon, false },
-    { "halberd", ITEM_DEFINITIONS.halberd.icon, false },
-    { "urn", ITEM_DEFINITIONS.urn.icon, false },
-    { "spirit_vessel", ITEM_DEFINITIONS.spirit_vessel.icon, false },
-    { "blink", ITEM_DEFINITIONS.blink.icon, false },
-    { "overwhelming_blink", ITEM_DEFINITIONS.overwhelming_blink.icon, false },
-    { "swift_blink", ITEM_DEFINITIONS.swift_blink.icon, false },
-    { "arcane_blink", ITEM_DEFINITIONS.arcane_blink.icon, false },
-    { "solar_crest", ITEM_DEFINITIONS.solar_crest.icon, false },
-    { "pavise", ITEM_DEFINITIONS.pavise.icon, false },
-    { "drums", ITEM_DEFINITIONS.drums.icon, false },
-    { "boots_of_bearing", ITEM_DEFINITIONS.boots_of_bearing.icon, false },
-    { "atos", ITEM_DEFINITIONS.atos.icon, false },
-    { "hex", ITEM_DEFINITIONS.hex.icon, false },
-    { "abyssal", ITEM_DEFINITIONS.abyssal.icon, false },
-    { "bloodthorn", ITEM_DEFINITIONS.bloodthorn.icon, false },
-    { "orchid", ITEM_DEFINITIONS.orchid.icon, false },
-    { "diffusal", ITEM_DEFINITIONS.diffusal.icon, false },
-    { "gleipnir", ITEM_DEFINITIONS.gleipnir.icon, false },
-    { "silver", ITEM_DEFINITIONS.silver.icon, false },
-    { "shadow_blade", ITEM_DEFINITIONS.shadow_blade.icon, false },
+local priority_defaults = {
+    glimmer = true,
+    ghost = true,
+    bkb = true,
 }
+
+local priority_keys = {
+    "glimmer",
+    "ghost",
+    "bkb",
+    "lotus",
+    "crimson",
+    "shivas",
+    "blade_mail",
+    "satanic",
+    "mjollnir",
+    "eul",
+    "wind_waker",
+    "force",
+    "hurricane",
+    "disperser",
+    "pipe",
+    "ethereal",
+    "nullifier",
+    "dagon",
+    "blood_grenade",
+    "halberd",
+    "urn",
+    "spirit_vessel",
+    "blink",
+    "overwhelming_blink",
+    "swift_blink",
+    "arcane_blink",
+    "solar_crest",
+    "pavise",
+    "drums",
+    "boots_of_bearing",
+    "atos",
+    "hex",
+    "abyssal",
+    "bloodthorn",
+    "orchid",
+    "diffusal",
+    "gleipnir",
+    "silver",
+    "shadow_blade",
+}
+
+local priority_items = {}
+for _, key in ipairs(priority_keys) do
+    local definition = ITEM_DEFINITIONS[key]
+    if definition then
+        priority_items[#priority_items + 1] = {
+            key,
+            definition.icon,
+            priority_defaults[key] or false,
+        }
+    end
+end
 
 local priority_widget = priority_group:MultiSelect("Items", priority_items, true)
 priority_widget:DragAllowed(true)
