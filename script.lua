@@ -90,6 +90,13 @@ local ITEM_DEFINITIONS = {
         type = "no_target",
         modifier = "modifier_item_blade_mail_reflect",
     },
+    satanic = {
+        item_name = "item_satanic",
+        icon = "panorama/images/items/satanic_png.vtex_c",
+        display_name = "Satanic",
+        type = "no_target",
+        modifier = "modifier_item_satanic_unholy_rage",
+    },
     mjollnir = {
         item_name = "item_mjollnir",
         icon = "panorama/images/items/mjollnir_png.vtex_c",
@@ -362,6 +369,7 @@ local priority_items = {
     { "crimson", ITEM_DEFINITIONS.crimson.icon, false },
     { "shivas", ITEM_DEFINITIONS.shivas.icon, false },
     { "blade_mail", ITEM_DEFINITIONS.blade_mail.icon, false },
+    { "satanic", ITEM_DEFINITIONS.satanic.icon, false },
     { "mjollnir", ITEM_DEFINITIONS.mjollnir.icon, false },
     { "eul", ITEM_DEFINITIONS.eul.icon, false },
     { "wind_waker", ITEM_DEFINITIONS.wind_waker.icon, false },
