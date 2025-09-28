@@ -12,6 +12,14 @@ if type(tab.Gear) == "function" then
     end
 end
 
+local GEAR_WIDGET_SCALE = 0.7
+local NON_COMPACT_WIDGET_SCALE = 0.6
+local base_widget_scale = GEAR_WIDGET_SCALE
+
+if settings_root == tab then
+    base_widget_scale = NON_COMPACT_WIDGET_SCALE
+end
+
 local function call_widget_method(widget, method_name, ...)
     if not widget or type(method_name) ~= "string" then
         return false
@@ -26,39 +34,41 @@ local function call_widget_method(widget, method_name, ...)
     return ok and true or false
 end
 
-local COMPACT_WIDGET_SCALE = 0.7
-
-local function apply_compact_style(widget)
+local function apply_compact_style(widget, scale)
     if not widget then
         return
     end
 
-    if call_widget_method(widget, "SetScale", COMPACT_WIDGET_SCALE) then
+    local effective_scale = scale or base_widget_scale or GEAR_WIDGET_SCALE
+
+    if call_widget_method(widget, "SetScale", effective_scale) then
         return
     end
 
-    if call_widget_method(widget, "SetScaleMultiplier", COMPACT_WIDGET_SCALE) then
+    if call_widget_method(widget, "SetScaleMultiplier", effective_scale) then
         return
     end
 
-    if call_widget_method(widget, "SetSizeMultiplier", COMPACT_WIDGET_SCALE) then
+    if call_widget_method(widget, "SetSizeMultiplier", effective_scale) then
         return
     end
 
-    if call_widget_method(widget, "SetWidthMultiplier", COMPACT_WIDGET_SCALE) then
+    if call_widget_method(widget, "SetWidthMultiplier", effective_scale) then
         return
     end
 
-    if call_widget_method(widget, "SetHeightMultiplier", COMPACT_WIDGET_SCALE) then
+    if call_widget_method(widget, "SetHeightMultiplier", effective_scale) then
         return
     end
 
-    if call_widget_method(widget, "SetItemHeightMultiplier", COMPACT_WIDGET_SCALE) then
+    if call_widget_method(widget, "SetItemHeightMultiplier", effective_scale) then
         return
     end
 
-    call_widget_method(widget, "SetItemSizeMultiplier", COMPACT_WIDGET_SCALE)
+    call_widget_method(widget, "SetItemSizeMultiplier", effective_scale)
 end
+
+apply_compact_style(settings_root)
 
 local function create_settings_group(label, order, allow_root)
     if settings_root ~= tab and type(settings_root) == "table" then
