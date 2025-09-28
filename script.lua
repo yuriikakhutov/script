@@ -3,7 +3,11 @@
 local auto_defender = {}
 
 local tab = Menu.Create("General", "Auto Defender", "Auto Defender", "Auto Defender")
-local info_group = tab:Create("Info", 0)
+
+local group_order = 0
+
+local info_group = tab:Create("Info", group_order)
+group_order = group_order + 1
 if info_group.Label then
     info_group:Label("Author: GhostyPowa")
 elseif info_group.Text then
@@ -21,13 +25,16 @@ else
     end
 end
 
-local activation_group = tab:Create("Activation")
-local priority_group = tab:Create("Item Priority", 1)
-local threshold_group = tab:Create("Item Thresholds", 2)
-local enemy_range_group = tab:Create("Enemy Range", 3)
+local base_group = tab:Create("Auto Defender", group_order)
+group_order = group_order + 1
+local priority_section = tab:Create("Приоритет предметов", group_order)
+group_order = group_order + 1
+local threshold_group = tab:Create("Пороги здоровья", group_order)
+group_order = group_order + 1
+local enemy_range_group = tab:Create("Радиусы врагов", group_order)
 
 local ui = {
-    enable = activation_group:Switch("Enable", true),
+    enable = base_group:Switch("Включить авто-защиту", true),
 }
 
 local ITEM_DEFINITIONS = {
@@ -470,21 +477,21 @@ for _, key in ipairs(priority_keys) do
     end
 end
 
-local priority_widget = priority_group:MultiSelect("Items", priority_items, true)
+local priority_widget = priority_section:MultiSelect("Список предметов", priority_items, true)
 priority_widget:DragAllowed(true)
-priority_widget:ToolTip("Drag to reorder priority. Enable items you want to use.")
+priority_widget:ToolTip("Перетащите, чтобы изменить порядок. Включите нужные предметы.")
 
 local priority_order = {}
 local item_thresholds = {}
 local item_enemy_ranges = {}
 
-local priority_delay_slider = priority_group:Slider(
-    "Delay After Successful Cast (ms)",
+local priority_delay_slider = base_group:Slider(
+    "Задержка между предметами (сек)",
     0,
     5000,
     0,
     function(value)
-        return string.format("%.2fs", value / 1000.0)
+        return string.format("%.2f с", value / 1000.0)
     end
 )
 
@@ -611,7 +618,7 @@ for _, item in ipairs(priority_items) do
     local key = item[1]
     local definition = ITEM_DEFINITIONS[key]
     if definition then
-        local threshold_label = string.format("%s (%%)", definition.display_name)
+        local threshold_label = string.format("Порог HP для %s (%%)", definition.display_name)
         item_thresholds[key] = threshold_group:Slider(
             threshold_label,
             1,
@@ -636,12 +643,12 @@ for _, item in ipairs(priority_items) do
             end
 
             item_enemy_ranges[key] = enemy_range_group:Slider(
-                definition.display_name,
+                string.format("Радиус врага для %s", definition.display_name),
                 100,
                 3000,
                 math.floor(default_range + 0.5),
                 function(value)
-                    return string.format("%d units", value)
+                    return string.format("%d ед.", value)
                 end
             )
             apply_widget_icon(item_enemy_ranges[key], resolve_item_icon(definition))
