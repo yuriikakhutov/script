@@ -2,30 +2,48 @@
 
 local auto_defender = {}
 
-local tab = Menu.Create("General", "Auto Defender", "Auto Defender", "Auto Defender")
+local Config = {
+    UI = {
+        TabName = "General",
+        ScriptName = "Auto Defender",
+        ScriptID = "auto_defender",
+        GearPage = "Settings",
+        Groups = {
+            Info = "Info",
+            Activation = "Activation",
+            Priority = "Item Priority",
+            Thresholds = "Item Thresholds",
+            EnemyRange = "Enemy Range",
+        },
+        Icons = {
+            Main = "\u{f6b6}",
+            Info = "\u{f129}",
+            Activation = "\u{f135}",
+            Priority = "\u{f0c9}",
+            Thresholds = "\u{f295}",
+            EnemyRange = "\u{f124}",
+            Enable = "\u{f205}",
+            MeteorCombo = "\u{f753}",
+            Scale = "\u{f547}",
+        },
+    },
+    Scale = {
+        GearDefault = 0.45,
+        FallbackDefault = 0.4,
+        Min = 0.35,
+        Max = 1.0,
+    },
+}
 
-local settings_root = tab
+local tab
+local settings_root
 local using_gear = false
-if type(tab.Gear) == "function" then
-    local ok, gear_tab = pcall(tab.Gear, tab, "Settings")
-    if ok and gear_tab then
-        settings_root = gear_tab
-        using_gear = true
-    end
-end
 
-local DEFAULT_GEAR_WIDGET_SCALE = 0.12
-local DEFAULT_NON_COMPACT_WIDGET_SCALE = 0.1
-local MIN_WIDGET_SCALE = 0.1
-local MAX_WIDGET_SCALE = 1.0
-
-local base_widget_scale = DEFAULT_GEAR_WIDGET_SCALE
-
-if settings_root == tab then
-    base_widget_scale = DEFAULT_NON_COMPACT_WIDGET_SCALE
-end
-
-local current_widget_scale = base_widget_scale
+local MIN_WIDGET_SCALE = Config.Scale.Min
+local MAX_WIDGET_SCALE = Config.Scale.Max
+local current_widget_scale = Config.Scale.FallbackDefault
+local base_widget_scale = current_widget_scale
+local last_scale_percent = math.floor(current_widget_scale * 100 + 0.5)
 
 local scaled_widgets = setmetatable({}, { __mode = "k" })
 
@@ -120,114 +138,232 @@ local function set_current_widget_scale(scale)
 
     rescale_registered_widgets()
 end
-apply_compact_style(tab, current_widget_scale)
-apply_compact_style(settings_root)
 
-local function add_section_label(container, text)
-    if not using_gear or not text or text == "" then
-        return
+local function InitializeUI()
+    tab = Menu.Create(
+        Config.UI.TabName,
+        Config.UI.ScriptName,
+        Config.UI.ScriptID,
+        Config.UI.ScriptID
+    )
+
+    if tab and Config.UI.Icons.Main and tab.Icon then
+        pcall(tab.Icon, tab, Config.UI.Icons.Main)
     end
 
-    local label
-    if type(container.Label) == "function" then
-        label = container:Label(text)
-    elseif type(container.Text) == "function" then
-        label = container:Text(text)
+    settings_root = tab
+    using_gear = false
+
+    if tab and type(tab.Gear) == "function" then
+        local ok, gear_tab = pcall(tab.Gear, tab, Config.UI.GearPage)
+        if ok and gear_tab then
+            settings_root = gear_tab
+            using_gear = true
+        end
     end
 
-    if label then
-        apply_compact_style(label)
-    end
-end
-
-local function resolve_container(label, add_label, order)
     if using_gear then
-        add_section_label(settings_root, add_label and label or nil)
-        return settings_root
+        current_widget_scale = Config.Scale.GearDefault
+    else
+        current_widget_scale = Config.Scale.FallbackDefault
     end
 
-    if type(tab.Create) == "function" then
-        local ok, group
-        if order ~= nil then
-            ok, group = pcall(tab.Create, tab, label, order)
+    base_widget_scale = current_widget_scale
+    last_scale_percent = math.floor(current_widget_scale * 100 + 0.5)
+
+    apply_compact_style(tab, current_widget_scale)
+    if settings_root and settings_root ~= tab then
+        apply_compact_style(settings_root, current_widget_scale)
+    end
+
+    local function add_section_label(container, text)
+        if not using_gear or not container or not text or text == "" then
+            return nil
+        end
+
+        local label
+        if type(container.Label) == "function" then
+            label = container:Label(text)
+        elseif type(container.Text) == "function" then
+            label = container:Text(text)
+        end
+
+        if label then
+            apply_compact_style(label)
+        end
+
+        return label
+    end
+
+    local function resolve_container(key, opts)
+        opts = opts or {}
+        local label = opts.label or Config.UI.Groups[key] or key
+        local order = opts.order
+        local add_label = opts.add_label
+        local icon = opts.icon or (Config.UI.Icons and Config.UI.Icons[key])
+
+        if using_gear then
+            add_section_label(settings_root, add_label and label or nil)
+            return settings_root
+        end
+
+        local parent = settings_root or tab
+        local group
+
+        if parent and type(parent.Create) == "function" then
+            local ok, created
+            if order ~= nil then
+                ok, created = pcall(parent.Create, parent, label, order)
+            else
+                ok, created = pcall(parent.Create, parent, label)
+            end
+
+            if ok and created then
+                group = created
+            end
+        end
+
+        if group and type(group.Create) == "function" then
+            if icon and type(group.Icon) == "function" then
+                pcall(group.Icon, group, icon)
+            end
+
+            local ok, inner = pcall(group.Create, group, "Group")
+            if ok and inner then
+                apply_compact_style(group)
+                group = inner
+            end
+        elseif group and icon and type(group.Icon) == "function" then
+            pcall(group.Icon, group, icon)
+        end
+
+        if not group then
+            group = parent
+        end
+
+        apply_compact_style(group)
+
+        return group
+    end
+
+    local info_group = resolve_container("Info", {
+        label = Config.UI.Groups.Info,
+        icon = Config.UI.Icons.Info,
+    })
+
+    if info_group then
+        if info_group.Label then
+            info_group:Label("Author: GhostyPowa")
+        elseif info_group.Text then
+            info_group:Text("Author: GhostyPowa")
         else
-            ok, group = pcall(tab.Create, tab, label)
+            local author_display = info_group:Switch("Author: GhostyPowa", false, Config.UI.Icons.Info)
+            if author_display then
+                apply_compact_style(author_display)
+                if author_display.SetEnabled then
+                    author_display:SetEnabled(false)
+                elseif author_display.Disable then
+                    author_display:Disable()
+                elseif author_display.SetState then
+                    author_display:SetState(false)
+                end
+            end
         end
-        if ok and group then
-            apply_compact_style(group)
-            return group
+
+        if info_group ~= settings_root then
+            apply_compact_style(info_group)
+        end
+    end
+
+    local activation_group = resolve_container("Activation", {
+        label = Config.UI.Groups.Activation,
+        icon = Config.UI.Icons.Activation,
+        add_label = true,
+    })
+
+    local priority_group = resolve_container("Priority", {
+        label = Config.UI.Groups.Priority,
+        icon = Config.UI.Icons.Priority,
+        add_label = true,
+        order = 1,
+    })
+
+    local threshold_group = resolve_container("Thresholds", {
+        label = Config.UI.Groups.Thresholds,
+        icon = Config.UI.Icons.Thresholds,
+        add_label = true,
+        order = 2,
+    })
+
+    local enemy_range_group = resolve_container("EnemyRange", {
+        label = Config.UI.Groups.EnemyRange,
+        icon = Config.UI.Icons.EnemyRange,
+        add_label = true,
+        order = 3,
+    })
+
+    local MIN_WIDGET_SCALE_PERCENT = math.floor(MIN_WIDGET_SCALE * 100 + 0.5)
+    local MAX_WIDGET_SCALE_PERCENT = math.floor(MAX_WIDGET_SCALE * 100 + 0.5)
+
+    local ui = {}
+
+    if activation_group then
+        ui.enable = activation_group:Switch("Enable", true, Config.UI.Icons.Enable)
+        ui.meteor_combo = activation_group:Switch("Meteor Hammer Combo", true, Config.UI.Icons.MeteorCombo)
+        ui.scale = activation_group:Slider(
+            "Interface Scale (%)",
+            MIN_WIDGET_SCALE_PERCENT,
+            MAX_WIDGET_SCALE_PERCENT,
+            last_scale_percent,
+            function(value)
+                return string.format("%d%%", value)
+            end
+        )
+
+        apply_compact_style(ui.enable)
+        apply_compact_style(ui.meteor_combo)
+        apply_compact_style(ui.scale)
+
+        if ui.scale and ui.scale.Set then
+            ui.scale:Set(last_scale_percent)
         end
     end
 
-    return settings_root
+    return {
+        tab = tab,
+        settings_root = settings_root,
+        using_gear = using_gear,
+        groups = {
+            info = info_group,
+            activation = activation_group,
+            priority = priority_group,
+            thresholds = threshold_group,
+            enemy_range = enemy_range_group,
+        },
+        ui = ui,
+        scale_bounds = {
+            min_percent = MIN_WIDGET_SCALE_PERCENT,
+            max_percent = MAX_WIDGET_SCALE_PERCENT,
+        },
+    }
 end
 
-local info_group = resolve_container("Info")
-if info_group.Label then
-    info_group:Label("Author: GhostyPowa")
-elseif info_group.Text then
-    info_group:Text("Author: GhostyPowa")
-else
-    local author_display = info_group:Switch("Author: GhostyPowa", false)
-    if author_display then
-        apply_compact_style(author_display)
-        if author_display.SetEnabled then
-            author_display:SetEnabled(false)
-        elseif author_display.Disable then
-            author_display:Disable()
-        elseif author_display.SetState then
-            author_display:SetState(false)
-        end
-    end
-end
+local menu_context = InitializeUI()
 
-if info_group ~= settings_root then
-    apply_compact_style(info_group)
-end
+tab = menu_context.tab
+settings_root = menu_context.settings_root
+using_gear = menu_context.using_gear
 
-local activation_group = resolve_container("Activation", using_gear and true)
-local priority_group = resolve_container("Item Priority", using_gear and true, 1)
-local threshold_group = resolve_container("Item Thresholds", using_gear and true, 2)
-local enemy_range_group = resolve_container("Enemy Range", using_gear and true, 3)
+local info_group = menu_context.groups.info
+local activation_group = menu_context.groups.activation
+local priority_group = menu_context.groups.priority
+local threshold_group = menu_context.groups.thresholds
+local enemy_range_group = menu_context.groups.enemy_range
 
-local MIN_WIDGET_SCALE_PERCENT = math.floor(MIN_WIDGET_SCALE * 100 + 0.5)
-local MAX_WIDGET_SCALE_PERCENT = math.floor(MAX_WIDGET_SCALE * 100 + 0.5)
-local last_scale_percent = math.floor(current_widget_scale * 100 + 0.5)
+local ui = menu_context.ui
 
-local ui = {}
-ui.enable = activation_group:Switch("Enable", true)
-ui.meteor_combo = activation_group:Switch("Meteor Hammer Combo", true)
-ui.scale = activation_group:Slider(
-    "Interface Scale (%)",
-    MIN_WIDGET_SCALE_PERCENT,
-    MAX_WIDGET_SCALE_PERCENT,
-    last_scale_percent,
-    function(value)
-        return string.format("%d%%", value)
-    end
-)
-
-apply_compact_style(ui.enable)
-apply_compact_style(ui.meteor_combo)
-apply_compact_style(ui.scale)
-if ui.scale and ui.scale.Set then
-    ui.scale:Set(last_scale_percent)
-end
-if activation_group and activation_group ~= settings_root then
-    apply_compact_style(activation_group)
-end
-
-if priority_group and priority_group ~= settings_root then
-    apply_compact_style(priority_group)
-end
-
-if threshold_group and threshold_group ~= settings_root then
-    apply_compact_style(threshold_group)
-end
-
-if enemy_range_group and enemy_range_group ~= settings_root then
-    apply_compact_style(enemy_range_group)
-end
+local MIN_WIDGET_SCALE_PERCENT = menu_context.scale_bounds.min_percent
+local MAX_WIDGET_SCALE_PERCENT = menu_context.scale_bounds.max_percent
 
 local ITEM_DEFINITIONS = {
     glimmer = {
