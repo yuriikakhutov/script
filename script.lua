@@ -1559,6 +1559,50 @@ local function get_escape_direction(hero, ability, definition, item_key)
     return direction, enemy
 end
 
+local function cast_target_self_item(hero, ability)
+    if not hero or not ability then
+        return false
+    end
+
+    local cast_ok, result = pcall(Ability.CastTarget, ability, hero)
+    if cast_ok and result ~= false then
+        return true
+    end
+
+    local player = Players and Players.GetLocal and Players.GetLocal() or nil
+    if not player then
+        return false
+    end
+
+    local prepare_orders = Player and Player.PrepareUnitOrders
+    if type(prepare_orders) ~= "function" then
+        return false
+    end
+
+    local unit_order = Enum and Enum.UnitOrder and Enum.UnitOrder.DOTA_UNIT_ORDER_CAST_TARGET
+    local issuer = Enum and Enum.PlayerOrderIssuer and Enum.PlayerOrderIssuer.DOTA_ORDER_ISSUER_HERO_ONLY
+    if not unit_order or not issuer then
+        return false
+    end
+
+    local order_ok = prepare_orders(
+        player,
+        unit_order,
+        hero,
+        nil,
+        ability,
+        issuer,
+        hero,
+        false,
+        false,
+        false,
+        false,
+        "auto_defender_self_cast"
+    )
+
+    return order_ok ~= false
+end
+
 local function cast_item(hero, item_key, game_time)
     local definition = ITEM_DEFINITIONS[item_key]
     if not definition then
@@ -1609,7 +1653,9 @@ local function cast_item(hero, item_key, game_time)
     if definition.type == "no_target" then
         Ability.CastNoTarget(item)
     elseif definition.type == "target_self" then
-        Ability.CastTarget(item, hero)
+        if not cast_target_self_item(hero, item) then
+            return CAST_RESULT_NONE
+        end
     elseif definition.type == "target_enemy" then
         local target = find_enemy_target(hero, item, definition, item_key)
         if not target then
