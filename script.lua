@@ -358,7 +358,7 @@ local METEOR_HAMMER_DEFINITION = {
     item_name = "item_meteor_hammer",
     icon = "panorama/images/items/meteor_hammer_png.vtex_c",
     type = "position_enemy",
-    range = 600,
+    range = 900,
 }
 
 local priority_defaults = {
@@ -712,49 +712,6 @@ local function mark_cast(item_id, game_time)
     last_cast_times[item_id] = game_time
 end
 
-local function cast_meteor_combo(hero, game_time)
-    if not is_meteor_combo_enabled() then
-        return false
-    end
-
-    if is_recently_cast(METEOR_COMBO_ITEM_KEY, game_time) then
-        return false
-    end
-
-    local item = get_inventory_item(hero, METEOR_HAMMER_DEFINITION)
-    if not item then
-        return false
-    end
-
-    if not Ability.IsReady(item) then
-        return false
-    end
-
-    local mana = NPC.GetMana(hero)
-    if not Ability.IsCastable(item, mana) then
-        return false
-    end
-
-    if not can_use_item(hero) then
-        return false
-    end
-
-    local target = find_enemy_target(hero, item, METEOR_HAMMER_DEFINITION, METEOR_COMBO_ITEM_KEY)
-    if not target then
-        return false
-    end
-
-    local target_pos = Entity.GetAbsOrigin(target)
-    if not target_pos then
-        return false
-    end
-
-    Ability.CastPosition(item, target_pos)
-    mark_cast(METEOR_COMBO_ITEM_KEY, game_time)
-
-    return true
-end
-
 local function get_enabled_items()
     refresh_priority_order()
 
@@ -911,6 +868,49 @@ local function find_closest_enemy(hero, range)
     end
 
     return closest_enemy
+end
+
+local function cast_meteor_combo(hero, game_time)
+    if not is_meteor_combo_enabled() then
+        return false
+    end
+
+    if is_recently_cast(METEOR_COMBO_ITEM_KEY, game_time) then
+        return false
+    end
+
+    local item = get_inventory_item(hero, METEOR_HAMMER_DEFINITION)
+    if not item then
+        return false
+    end
+
+    if not Ability.IsReady(item) then
+        return false
+    end
+
+    local mana = NPC.GetMana(hero)
+    if not Ability.IsCastable(item, mana) then
+        return false
+    end
+
+    if not can_use_item(hero) then
+        return false
+    end
+
+    local target = find_enemy_target(hero, item, METEOR_HAMMER_DEFINITION, METEOR_COMBO_ITEM_KEY)
+    if not target then
+        return false
+    end
+
+    local target_pos = Entity.GetAbsOrigin(target)
+    if not target_pos then
+        return false
+    end
+
+    Ability.CastPosition(item, target_pos)
+    mark_cast(METEOR_COMBO_ITEM_KEY, game_time)
+
+    return true
 end
 
 local function normalize_flat_vector(vector)
