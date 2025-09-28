@@ -95,6 +95,122 @@ local function apply_compact_style(widget, scale)
     set_widget_scale(widget, scale)
 end
 
+local function hide_widget(widget)
+    if not widget then
+        return
+    end
+
+    local widget_type = type(widget)
+    if widget_type ~= "table" and widget_type ~= "userdata" then
+        return
+    end
+
+    call_widget_method(widget, "Hide")
+    call_widget_method(widget, "SetVisible", false)
+    call_widget_method(widget, "SetHidden", true)
+    call_widget_method(widget, "SetCollapsed", true)
+    call_widget_method(widget, "SetEnabled", false)
+    call_widget_method(widget, "Disable")
+    call_widget_method(widget, "SetState", false)
+    call_widget_method(widget, "SetActive", false)
+end
+
+local function disable_interface_scale(container)
+    if not container then
+        return
+    end
+
+    local hidden_widget
+
+    local function try_method(name)
+        if hidden_widget then
+            return
+        end
+
+        local method = container[name]
+        if type(method) ~= "function" then
+            return
+        end
+
+        local ok, widget = pcall(method, container)
+        if not ok then
+            return
+        end
+
+        if widget then
+            if type(widget) == "table" or type(widget) == "userdata" then
+                hidden_widget = widget
+                hide_widget(widget)
+                call_widget_method(widget, "Destroy")
+            else
+                hidden_widget = widget
+            end
+        end
+    end
+
+    try_method("InterfaceScale")
+    try_method("CreateInterfaceScale")
+    try_method("GetInterfaceScale")
+    try_method("CreateScale")
+    try_method("CreateScaleSlider")
+    try_method("ScaleSlider")
+    try_method("Scale")
+
+    if hidden_widget then
+        return
+    end
+
+    local ok, entries = pcall(function()
+        local values = {}
+        for key, value in pairs(container) do
+            values[#values + 1] = { key = key, value = value }
+        end
+        return values
+    end)
+
+    if not ok or type(entries) ~= "table" then
+        return
+    end
+
+    for _, entry in ipairs(entries) do
+        local widget = entry.value
+        if type(widget) == "table" then
+            local label
+
+            if type(widget.GetLabel) == "function" then
+                local ok_label, value = pcall(widget.GetLabel, widget)
+                if ok_label then
+                    label = value
+                end
+            end
+
+            if not label and type(widget.GetText) == "function" then
+                local ok_label, value = pcall(widget.GetText, widget)
+                if ok_label then
+                    label = value
+                end
+            end
+
+            if not label and type(widget.Label) == "function" then
+                local ok_label, value = pcall(widget.Label, widget)
+                if ok_label then
+                    label = value
+                end
+            end
+
+            if type(label) == "string" then
+                local lowered = label:lower()
+                if lowered:find("scale") then
+                    hide_widget(widget)
+                    call_widget_method(widget, "Destroy")
+                    hidden_widget = widget
+                    break
+                end
+            end
+        end
+    end
+end
+
 local function InitializeUI()
     tab = Menu.Create(
         Config.UI.TabName,
@@ -106,6 +222,8 @@ local function InitializeUI()
     if tab and Config.UI.Icons.Main and tab.Icon then
         pcall(tab.Icon, tab, Config.UI.Icons.Main)
     end
+
+    disable_interface_scale(tab)
 
     using_gear = false
     gear_panel = nil
@@ -127,6 +245,7 @@ local function InitializeUI()
     apply_compact_style(tab, compact_scale)
     if gear_panel then
         apply_compact_style(gear_panel, compact_scale)
+        disable_interface_scale(gear_panel)
     end
 
     local function create_submenu_group(key, opts)
@@ -148,6 +267,7 @@ local function InitializeUI()
         end
 
         apply_compact_style(sub_tab)
+        disable_interface_scale(sub_tab)
 
         if type(sub_tab.Create) ~= "function" then
             return sub_tab
