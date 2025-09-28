@@ -823,6 +823,8 @@ local ESCAPE_STOP_COOLDOWN = 0.05
 local escape_block_end_time = 0
 local escape_last_stop_time = 0
 local escape_last_face_time = 0
+local escape_block_source = nil
+local escape_block_mode = nil
 local allowed_escape_sequences = {}
 local ESCAPE_TURN_GRACE_PERIOD = 0.18
 local pending_escape_casts = {}
@@ -908,6 +910,10 @@ local function clear_pending_escape(item_key)
     pending_escape_casts[item_key] = nil
 end
 
+local function clear_all_pending_escapes()
+    pending_escape_casts = {}
+end
+
 local function needs_new_escape(direction, enemy, pending)
     if not pending then
         return true
@@ -931,7 +937,15 @@ local function needs_new_escape(direction, enemy, pending)
 end
 
 local function is_escape_blocking(game_time)
-    return game_time and game_time < escape_block_end_time
+    if not game_time then
+        return false, nil, nil
+    end
+
+    if game_time < escape_block_end_time then
+        return true, escape_block_mode, escape_block_source
+    end
+
+    return false, nil, nil
 end
 
 local function issue_stop_order(hero, game_time)
@@ -978,7 +992,7 @@ local function issue_stop_order(hero, game_time)
     escape_last_stop_time = game_time
 end
 
-local function activate_escape_block(hero, game_time, duration)
+local function activate_escape_block(hero, game_time, duration, source, mode)
     if not game_time then
         return
     end
@@ -993,6 +1007,13 @@ local function activate_escape_block(hero, game_time, duration)
         escape_block_end_time = block_until
     end
 
+    escape_block_source = source
+    if source then
+        escape_block_mode = mode or "generic"
+    else
+        escape_block_mode = mode or nil
+    end
+
     issue_stop_order(hero, game_time)
 end
 
@@ -1001,6 +1022,8 @@ local function clear_escape_block()
     escape_last_stop_time = 0
     escape_last_face_time = 0
     allowed_escape_sequences = {}
+    escape_block_source = nil
+    escape_block_mode = nil
 end
 
 local function does_order_include_hero(data, hero)
@@ -1069,7 +1092,8 @@ local function should_block_order(data)
         return false
     end
 
-    return is_escape_blocking(game_time)
+    local blocking = is_escape_blocking(game_time)
+    return blocking
 end
 
 function auto_defender.OnPrepareUnitOrders(data)
@@ -1110,8 +1134,16 @@ local function cast_item(hero, item_key, game_time)
         return false
     end
 
-    if is_escape_blocking(game_time) and definition.type ~= "escape_self" then
-        return false
+    local blocking, block_mode, block_source = is_escape_blocking(game_time)
+    if blocking and definition.type ~= "escape_self" then
+        local is_escape_position = definition.type == "escape_position"
+        if is_escape_position and block_mode == "prep" and block_source and block_source ~= item_key then
+            clear_pending_escape(block_source)
+            clear_escape_block()
+            blocking = false
+        else
+            return false
+        end
     end
 
     if is_recently_cast(item_key, game_time) then
@@ -1188,7 +1220,7 @@ local function cast_item(hero, item_key, game_time)
         if not definition.requires_facing then
             clear_pending_escape(item_key)
             Ability.CastTarget(item, hero, false, false, false, ESCAPE_ORDER_IDENTIFIER)
-            activate_escape_block(hero, game_time, ESCAPE_POST_CAST_BLOCK_DURATION)
+            activate_escape_block(hero, game_time, ESCAPE_POST_CAST_BLOCK_DURATION, item_key, "post")
         else
             local pending = pending_escape_casts[item_key]
 
@@ -1198,7 +1230,7 @@ local function cast_item(hero, item_key, game_time)
                     direction = direction,
                     enemy = enemy,
                 }
-                activate_escape_block(hero, game_time, ESCAPE_PREP_BLOCK_DURATION + ESCAPE_MIN_TURN_DELAY)
+                activate_escape_block(hero, game_time, ESCAPE_PREP_BLOCK_DURATION + ESCAPE_MIN_TURN_DELAY, item_key, "prep")
                 if not is_channelling(hero) then
                     face_direction(hero, direction)
                 end
@@ -1210,7 +1242,7 @@ local function cast_item(hero, item_key, game_time)
             if not pending.ready_time then
                 pending.ready_time = game_time + ESCAPE_MIN_TURN_DELAY
             end
-            activate_escape_block(hero, game_time, ESCAPE_PREP_BLOCK_DURATION)
+            activate_escape_block(hero, game_time, ESCAPE_PREP_BLOCK_DURATION, item_key, "prep")
 
             if game_time < pending.ready_time then
                 if not is_channelling(hero) then
@@ -1221,7 +1253,7 @@ local function cast_item(hero, item_key, game_time)
 
             if not is_facing_direction(hero, pending.direction) then
                 pending.ready_time = game_time + ESCAPE_TURN_RETRY_DELAY
-                activate_escape_block(hero, game_time, ESCAPE_PREP_BLOCK_DURATION + ESCAPE_TURN_RETRY_DELAY)
+                activate_escape_block(hero, game_time, ESCAPE_PREP_BLOCK_DURATION + ESCAPE_TURN_RETRY_DELAY, item_key, "prep")
                 if not is_channelling(hero) then
                     face_direction(hero, pending.direction)
                 end
@@ -1232,7 +1264,7 @@ local function cast_item(hero, item_key, game_time)
                 face_direction(hero, pending.direction)
             end
             Ability.CastTarget(item, hero, false, false, false, ESCAPE_ORDER_IDENTIFIER)
-            activate_escape_block(hero, game_time, ESCAPE_POST_CAST_BLOCK_DURATION)
+            activate_escape_block(hero, game_time, ESCAPE_POST_CAST_BLOCK_DURATION, item_key, "post")
             clear_pending_escape(item_key)
         end
     elseif definition.type == "escape_position" then
@@ -1255,7 +1287,8 @@ local function cast_item(hero, item_key, game_time)
         cast_position.z = hero_pos.z
 
         Ability.CastPosition(item, cast_position, false, false, false, ESCAPE_ORDER_IDENTIFIER)
-        activate_escape_block(hero, game_time, ESCAPE_POST_CAST_BLOCK_DURATION)
+        clear_all_pending_escapes()
+        activate_escape_block(hero, game_time, ESCAPE_POST_CAST_BLOCK_DURATION, item_key, "post")
     else
         return false
     end
@@ -1297,7 +1330,8 @@ function auto_defender.OnUpdate()
     local health_percent = (current_health / max_health) * 100.0
 
     local game_time = GameRules.GetGameTime()
-    if is_escape_blocking(game_time) then
+    local blocking = is_escape_blocking(game_time)
+    if blocking then
         issue_stop_order(hero, game_time)
     end
 
