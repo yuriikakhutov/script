@@ -830,6 +830,49 @@ local function clear_escape_block()
     allowed_escape_sequences = {}
 end
 
+local function does_order_include_hero(data, hero)
+    if not data or not hero then
+        return false
+    end
+
+    if data.npc == hero then
+        return true
+    end
+
+    local units = data.units
+    if not units then
+        return false
+    end
+
+    if type(units) == "table" then
+        for _, unit in pairs(units) do
+            if unit == hero then
+                return true
+            end
+        end
+        return false
+    end
+
+    local get_length = units.GetLength or units.Length or units.Count or units.Size
+    local get_value = units.Get or units.GetValue or units.At or units.GetByIndex
+    if get_length and get_value then
+        local length = get_length(units)
+        if length then
+            for i = 1, length do
+                local unit = get_value(units, i)
+                if not unit and i == 1 then
+                    unit = get_value(units, 0)
+                end
+                if unit == hero then
+                    return true
+                end
+            end
+        end
+    end
+
+    return false
+end
+
 local function should_block_order(data)
     if not data or data.identifier == ESCAPE_ORDER_IDENTIFIER then
         return false
@@ -844,7 +887,7 @@ local function should_block_order(data)
     end
 
     local hero = Heroes.GetLocal()
-    if not hero or data.npc ~= hero then
+    if not hero or not does_order_include_hero(data, hero) then
         return false
     end
 
