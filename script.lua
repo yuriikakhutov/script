@@ -178,7 +178,9 @@ local ITEM_DEFINITIONS = {
         display_name = "Gleipnir",
         type = "position_enemy",
         enemy_modifier = "modifier_gleipnir_root",
+        requires_enemy = true,
         range = 1100,
+        search_range = 1100,
     },
     bloodthorn = {
         item_name = "item_bloodthorn",
