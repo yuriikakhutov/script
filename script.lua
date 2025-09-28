@@ -133,7 +133,6 @@ local ITEM_DEFINITIONS = {
         type = "escape_self",
         modifier = "modifier_item_forcestaff_active",
         search_range = 1600,
-        requires_facing = true,
     },
     hurricane = {
         item_name = "item_hurricane_pike",
@@ -142,7 +141,6 @@ local ITEM_DEFINITIONS = {
         type = "escape_self",
         modifier = "modifier_item_hurricane_pike_active",
         search_range = 1600,
-        requires_facing = true,
     },
     atos = {
         item_name = "item_rod_of_atos",
@@ -590,9 +588,6 @@ local priority_delay_until = 0.0
 
 local CAST_RESULT_NONE = 0
 local CAST_RESULT_CAST = 1
-local CAST_RESULT_PENDING = 2
-
-local ESCAPE_FACING_THRESHOLD = 0.95
 
 local CONTROL_BLOCKERS = {
     Enum.ModifierState.MODIFIER_STATE_STUNNED,
@@ -624,109 +619,6 @@ end
 
 local function mark_cast(item_id, game_time)
     last_cast_times[item_id] = game_time
-end
-
-local function is_channelling(hero)
-    if not NPC.IsChannellingAbility then
-        return false
-    end
-
-    return NPC.IsChannellingAbility(hero)
-end
-
-local function get_forward_vector(hero)
-    local rotation = Entity.GetRotation(hero)
-    if not rotation then
-        return nil
-    end
-
-    local yaw = rotation.y
-    if not yaw then
-        return nil
-    end
-
-    local radians = math.rad(yaw)
-
-    return Vector(math.cos(radians), math.sin(radians), 0)
-end
-
-local function is_facing_direction(hero, direction)
-    if not direction then
-        return false
-    end
-
-    local forward = get_forward_vector(hero)
-    if not forward then
-        return false
-    end
-
-    local dot = forward.x * direction.x + forward.y * direction.y
-
-    return dot >= ESCAPE_FACING_THRESHOLD
-end
-
-local function face_direction(hero, direction)
-    if not hero or not direction or is_channelling(hero) then
-        return false
-    end
-
-    if not Players or not Player or not Players.GetLocal or not Player.PrepareUnitOrders then
-        return false
-    end
-
-    local player = Players.GetLocal()
-    if not player then
-        return false
-    end
-
-    local hero_pos = Entity.GetAbsOrigin(hero)
-    if not hero_pos then
-        return false
-    end
-
-    local move_target = hero_pos + direction * 50
-    move_target.z = hero_pos.z
-
-    Player.PrepareUnitOrders(
-        player,
-        Enum.UnitOrder.DOTA_UNIT_ORDER_MOVE_TO_POSITION,
-        nil,
-        move_target,
-        nil,
-        Enum.PlayerOrderIssuer.DOTA_ORDER_ISSUER_HERO_ONLY,
-        hero,
-        false,
-        false
-    )
-
-    return true
-end
-
-local function stop_hero(hero)
-    if not hero then
-        return
-    end
-
-    if not Players or not Player or not Players.GetLocal or not Player.PrepareUnitOrders then
-        return
-    end
-
-    local player = Players.GetLocal()
-    if not player then
-        return
-    end
-
-    Player.PrepareUnitOrders(
-        player,
-        Enum.UnitOrder.DOTA_UNIT_ORDER_STOP,
-        nil,
-        nil,
-        nil,
-        Enum.PlayerOrderIssuer.DOTA_ORDER_ISSUER_HERO_ONLY,
-        hero,
-        false,
-        false
-    )
 end
 
 local function get_enabled_items()
@@ -1010,18 +902,6 @@ local function cast_item(hero, item_key, game_time)
             return CAST_RESULT_NONE
         end
 
-        if definition.requires_facing and not is_facing_direction(hero, direction) then
-            if face_direction(hero, direction) then
-                return CAST_RESULT_PENDING
-            end
-
-            return CAST_RESULT_NONE
-        end
-
-        if definition.requires_facing then
-            stop_hero(hero)
-        end
-
         Ability.CastTarget(item, hero, false, false, false, ESCAPE_ORDER_IDENTIFIER)
     elseif definition.type == "escape_position" then
         local direction = get_escape_direction(hero, item, definition, item_key)
@@ -1110,8 +990,6 @@ function auto_defender.OnUpdate()
                         priority_delay_until = 0.0
                     end
                 end
-                break
-            elseif result == CAST_RESULT_PENDING then
                 break
             end
         end
