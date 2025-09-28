@@ -632,6 +632,18 @@ local function is_channelling(hero)
     return NPC.IsChannellingAbility(hero)
 end
 
+local ESCAPE_MIN_TURN_DELAY = 0.25
+local ESCAPE_TURN_RETRY_DELAY = 0.05
+local ESCAPE_PREP_BLOCK_DURATION = 0.45
+local ESCAPE_POST_CAST_BLOCK_DURATION = 0.6
+local ESCAPE_STOP_COOLDOWN = 0.05
+local escape_block_end_time = 0
+local escape_last_stop_time = 0
+local escape_last_face_time = 0
+local ESCAPE_TURN_GRACE_PERIOD = 0.18
+local pending_escape_casts = {}
+local ESCAPE_ORDER_IDENTIFIER = "auto_defender_escape"
+
 local function face_direction(hero, direction)
     if not hero or not direction then
         return
@@ -671,6 +683,13 @@ local function face_direction(hero, direction)
         false,
         ESCAPE_ORDER_IDENTIFIER
     )
+
+    if GameRules and GameRules.GetGameTime then
+        local now = GameRules.GetGameTime()
+        if now then
+            escape_last_face_time = now
+        end
+    end
 end
 
 local function get_escape_direction(hero, ability, definition, item_key)
@@ -700,16 +719,6 @@ local function get_escape_direction(hero, ability, definition, item_key)
 
     return direction, enemy
 end
-
-local ESCAPE_MIN_TURN_DELAY = 0.15
-local ESCAPE_TURN_RETRY_DELAY = 0.05
-local ESCAPE_PREP_BLOCK_DURATION = 0.45
-local ESCAPE_POST_CAST_BLOCK_DURATION = 0.6
-local ESCAPE_STOP_COOLDOWN = 0.05
-local escape_block_end_time = 0
-local escape_last_stop_time = 0
-local pending_escape_casts = {}
-local ESCAPE_ORDER_IDENTIFIER = "auto_defender_escape"
 
 local function clear_pending_escape(item_key)
     pending_escape_casts[item_key] = nil
@@ -747,6 +756,10 @@ local function issue_stop_order(hero, game_time)
     end
 
     if not game_time then
+        return
+    end
+
+    if escape_last_face_time > 0 and game_time < escape_last_face_time + ESCAPE_TURN_GRACE_PERIOD then
         return
     end
 
@@ -802,6 +815,7 @@ end
 local function clear_escape_block()
     escape_block_end_time = 0
     escape_last_stop_time = 0
+    escape_last_face_time = 0
 end
 
 local function should_block_order(data)
