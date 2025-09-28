@@ -36,8 +36,8 @@ local Config = {
 }
 
 local tab
-local settings_root
 local using_gear = false
+local gear_panel
 
 local MIN_WIDGET_SCALE = Config.Scale.Min
 local MAX_WIDGET_SCALE = Config.Scale.Max
@@ -151,13 +151,13 @@ local function InitializeUI()
         pcall(tab.Icon, tab, Config.UI.Icons.Main)
     end
 
-    settings_root = tab
     using_gear = false
+    gear_panel = nil
 
     if tab and type(tab.Gear) == "function" then
         local ok, gear_tab = pcall(tab.Gear, tab, Config.UI.GearPage)
         if ok and gear_tab then
-            settings_root = gear_tab
+            gear_panel = gear_tab
             using_gear = true
         end
     end
@@ -172,73 +172,37 @@ local function InitializeUI()
     last_scale_percent = math.floor(current_widget_scale * 100 + 0.5)
 
     apply_compact_style(tab, current_widget_scale)
-    if settings_root and settings_root ~= tab then
-        apply_compact_style(settings_root, current_widget_scale)
+    if gear_panel then
+        apply_compact_style(gear_panel, current_widget_scale)
     end
 
-    local function add_section_label(container, text)
-        if not using_gear or not container or not text or text == "" then
+    local function create_submenu_group(key, opts)
+        opts = opts or {}
+        local label = opts.label or Config.UI.Groups[key] or key
+        local icon = opts.icon or (Config.UI.Icons and Config.UI.Icons[key])
+
+        if not tab or type(tab.Create) ~= "function" then
             return nil
         end
 
-        local label
-        if type(container.Label) == "function" then
-            label = container:Label(text)
-        elseif type(container.Text) == "function" then
-            label = container:Text(text)
+        local ok, sub_tab = pcall(tab.Create, tab, label)
+        if not ok or not sub_tab then
+            return nil
         end
 
-        if label then
-            apply_compact_style(label)
+        if icon and type(sub_tab.Icon) == "function" then
+            pcall(sub_tab.Icon, sub_tab, icon)
         end
 
-        return label
-    end
+        apply_compact_style(sub_tab)
 
-    local function resolve_container(key, opts)
-        opts = opts or {}
-        local label = opts.label or Config.UI.Groups[key] or key
-        local order = opts.order
-        local add_label = opts.add_label
-        local icon = opts.icon or (Config.UI.Icons and Config.UI.Icons[key])
-
-        if using_gear then
-            add_section_label(settings_root, add_label and label or nil)
-            return settings_root
+        if type(sub_tab.Create) ~= "function" then
+            return sub_tab
         end
 
-        local parent = settings_root or tab
-        local group
-
-        if parent and type(parent.Create) == "function" then
-            local ok, created
-            if order ~= nil then
-                ok, created = pcall(parent.Create, parent, label, order)
-            else
-                ok, created = pcall(parent.Create, parent, label)
-            end
-
-            if ok and created then
-                group = created
-            end
-        end
-
-        if group and type(group.Create) == "function" then
-            if icon and type(group.Icon) == "function" then
-                pcall(group.Icon, group, icon)
-            end
-
-            local ok, inner = pcall(group.Create, group, "Group")
-            if ok and inner then
-                apply_compact_style(group)
-                group = inner
-            end
-        elseif group and icon and type(group.Icon) == "function" then
-            pcall(group.Icon, group, icon)
-        end
-
-        if not group then
-            group = parent
+        local ok_group, group = pcall(sub_tab.Create, sub_tab, opts.inner or "Group")
+        if not ok_group or not group then
+            return sub_tab
         end
 
         apply_compact_style(group)
@@ -246,7 +210,7 @@ local function InitializeUI()
         return group
     end
 
-    local info_group = resolve_container("Info", {
+    local info_group = create_submenu_group("Info", {
         label = Config.UI.Groups.Info,
         icon = Config.UI.Icons.Info,
     })
@@ -270,36 +234,27 @@ local function InitializeUI()
             end
         end
 
-        if info_group ~= settings_root then
-            apply_compact_style(info_group)
-        end
+        apply_compact_style(info_group)
     end
 
-    local activation_group = resolve_container("Activation", {
+    local activation_group = create_submenu_group("Activation", {
         label = Config.UI.Groups.Activation,
         icon = Config.UI.Icons.Activation,
-        add_label = true,
     })
 
-    local priority_group = resolve_container("Priority", {
+    local priority_group = create_submenu_group("Priority", {
         label = Config.UI.Groups.Priority,
         icon = Config.UI.Icons.Priority,
-        add_label = true,
-        order = 1,
     })
 
-    local threshold_group = resolve_container("Thresholds", {
+    local threshold_group = create_submenu_group("Thresholds", {
         label = Config.UI.Groups.Thresholds,
         icon = Config.UI.Icons.Thresholds,
-        add_label = true,
-        order = 2,
     })
 
-    local enemy_range_group = resolve_container("EnemyRange", {
+    local enemy_range_group = create_submenu_group("EnemyRange", {
         label = Config.UI.Groups.EnemyRange,
         icon = Config.UI.Icons.EnemyRange,
-        add_label = true,
-        order = 3,
     })
 
     local MIN_WIDGET_SCALE_PERCENT = math.floor(MIN_WIDGET_SCALE * 100 + 0.5)
@@ -307,10 +262,18 @@ local function InitializeUI()
 
     local ui = {}
 
+    local scale_container = gear_panel or activation_group
+
     if activation_group then
         ui.enable = activation_group:Switch("Enable", true, Config.UI.Icons.Enable)
         ui.meteor_combo = activation_group:Switch("Meteor Hammer Combo", true, Config.UI.Icons.MeteorCombo)
-        ui.scale = activation_group:Slider(
+
+        apply_compact_style(ui.enable)
+        apply_compact_style(ui.meteor_combo)
+    end
+
+    if scale_container then
+        ui.scale = scale_container:Slider(
             "Interface Scale (%)",
             MIN_WIDGET_SCALE_PERCENT,
             MAX_WIDGET_SCALE_PERCENT,
@@ -320,8 +283,6 @@ local function InitializeUI()
             end
         )
 
-        apply_compact_style(ui.enable)
-        apply_compact_style(ui.meteor_combo)
         apply_compact_style(ui.scale)
 
         if ui.scale and ui.scale.Set then
@@ -331,8 +292,8 @@ local function InitializeUI()
 
     return {
         tab = tab,
-        settings_root = settings_root,
         using_gear = using_gear,
+        gear_panel = gear_panel,
         groups = {
             info = info_group,
             activation = activation_group,
@@ -351,8 +312,8 @@ end
 local menu_context = InitializeUI()
 
 tab = menu_context.tab
-settings_root = menu_context.settings_root
 using_gear = menu_context.using_gear
+gear_panel = menu_context.gear_panel
 
 local info_group = menu_context.groups.info
 local activation_group = menu_context.groups.activation
