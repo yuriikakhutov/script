@@ -407,12 +407,19 @@ local priority_widget = priority_group:MultiSelect("Items", priority_items, true
 priority_widget:DragAllowed(true)
 priority_widget:ToolTip("Drag to reorder priority. Enable items you want to use.")
 
-local delay_group = tab:Create("Item Delays", 4)
-
 local priority_order = {}
 local item_thresholds = {}
 local item_enemy_ranges = {}
-local item_delay_sliders = {}
+
+local priority_delay_slider = priority_group:Slider(
+    "Delay After Successful Cast (ms)",
+    0,
+    5000,
+    0,
+    function(value)
+        return string.format("%.2fs", value / 1000.0)
+    end
+)
 
 local DEFAULT_SEARCH_RANGE = 1200
 
@@ -537,16 +544,6 @@ for _, item in ipairs(priority_items) do
     local key = item[1]
     local definition = ITEM_DEFINITIONS[key]
     if definition then
-        item_delay_sliders[key] = delay_group:Slider(
-            definition.display_name,
-            0,
-            5000,
-            0,
-            function(value)
-                return string.format("%.2fs", value / 1000.0)
-            end
-        )
-
         item_thresholds[key] = threshold_group:Slider(
             definition.display_name,
             1,
@@ -968,9 +965,8 @@ function auto_defender.OnUpdate()
             local result = cast_item(hero, key, game_time)
 
             if result == CAST_RESULT_CAST then
-                local delay_slider = item_delay_sliders[key]
-                if delay_slider then
-                    local delay_ms = delay_slider:Get()
+                if priority_delay_slider then
+                    local delay_ms = priority_delay_slider:Get()
                     if delay_ms and delay_ms > 0 then
                         next_cast_available_time = game_time + (delay_ms / 1000.0)
                     else
