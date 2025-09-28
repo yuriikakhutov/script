@@ -5,10 +5,12 @@ local auto_defender = {}
 local tab = Menu.Create("General", "Auto Defender", "Auto Defender", "Auto Defender")
 
 local settings_root = tab
+local using_gear = false
 if type(tab.Gear) == "function" then
     local ok, gear_tab = pcall(tab.Gear, tab, "Settings")
     if ok and gear_tab then
         settings_root = gear_tab
+        using_gear = true
     end
 end
 
@@ -71,23 +73,38 @@ end
 apply_compact_style(tab, base_widget_scale)
 apply_compact_style(settings_root)
 
-local function create_settings_group(label, order, allow_root)
-    if settings_root ~= tab and type(settings_root) == "table" then
-        if type(settings_root.Create) == "function" then
-            local ok, group = pcall(settings_root.Create, settings_root, label, order)
-            if ok and group then
-                return group
-            end
-        end
+local function add_section_label(container, text)
+    if not using_gear or not text or text == "" then
+        return
+    end
 
-        if allow_root and type(settings_root.Switch) == "function" then
-            return settings_root
-        end
+    local label
+    if type(container.Label) == "function" then
+        label = container:Label(text)
+    elseif type(container.Text) == "function" then
+        label = container:Text(text)
+    end
+
+    if label then
+        apply_compact_style(label)
+    end
+end
+
+local function resolve_container(label, add_label, order)
+    if using_gear then
+        add_section_label(settings_root, add_label and label or nil)
+        return settings_root
     end
 
     if type(tab.Create) == "function" then
-        local ok, group = pcall(tab.Create, tab, label, order)
+        local ok, group
+        if order ~= nil then
+            ok, group = pcall(tab.Create, tab, label, order)
+        else
+            ok, group = pcall(tab.Create, tab, label)
+        end
         if ok and group then
+            apply_compact_style(group)
             return group
         end
     end
@@ -95,7 +112,7 @@ local function create_settings_group(label, order, allow_root)
     return settings_root
 end
 
-local info_group = create_settings_group("Info", 0)
+local info_group = resolve_container("Info")
 if info_group.Label then
     info_group:Label("Author: GhostyPowa")
 elseif info_group.Text then
@@ -114,12 +131,14 @@ else
     end
 end
 
-apply_compact_style(info_group)
+if info_group ~= settings_root then
+    apply_compact_style(info_group)
+end
 
-local activation_group = create_settings_group("Activation", nil, true)
-local priority_group = create_settings_group("Item Priority", 1)
-local threshold_group = create_settings_group("Item Thresholds", 2)
-local enemy_range_group = create_settings_group("Enemy Range", 3)
+local activation_group = resolve_container("Activation", using_gear and true)
+local priority_group = resolve_container("Item Priority", using_gear and true, 1)
+local threshold_group = resolve_container("Item Thresholds", using_gear and true, 2)
+local enemy_range_group = resolve_container("Enemy Range", using_gear and true, 3)
 
 local ui = {}
 ui.enable = activation_group:Switch("Enable", true)
@@ -127,10 +146,21 @@ ui.meteor_combo = activation_group:Switch("Meteor Hammer Combo", true)
 
 apply_compact_style(ui.enable)
 apply_compact_style(ui.meteor_combo)
-apply_compact_style(activation_group)
-apply_compact_style(priority_group)
-apply_compact_style(threshold_group)
-apply_compact_style(enemy_range_group)
+if activation_group and activation_group ~= settings_root then
+    apply_compact_style(activation_group)
+end
+
+if priority_group and priority_group ~= settings_root then
+    apply_compact_style(priority_group)
+end
+
+if threshold_group and threshold_group ~= settings_root then
+    apply_compact_style(threshold_group)
+end
+
+if enemy_range_group and enemy_range_group ~= settings_root then
+    apply_compact_style(enemy_range_group)
+end
 
 local ITEM_DEFINITIONS = {
     glimmer = {
