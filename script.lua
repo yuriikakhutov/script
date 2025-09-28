@@ -4,6 +4,7 @@ local rubick = {}
 
 --#region Menu
 local tab = Menu.Create("Heroes", "Intelligence", "Rubick")
+tab:LinkHero(Engine.GetHeroIDByName("npc_dota_hero_rubick"), Enum.Attributes.INT)
 tab:Icon("panorama/images/heroes/icons/npc_dota_hero_rubick_png.vtex_c")
 local group = tab:Create("Automation"):Create("Auto Spell Steal")
 
