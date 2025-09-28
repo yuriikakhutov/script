@@ -698,6 +698,33 @@ local function face_direction(hero, direction)
     return true
 end
 
+local function stop_hero(hero)
+    if not hero then
+        return
+    end
+
+    if not Players or not Player or not Players.GetLocal or not Player.PrepareUnitOrders then
+        return
+    end
+
+    local player = Players.GetLocal()
+    if not player then
+        return
+    end
+
+    Player.PrepareUnitOrders(
+        player,
+        Enum.UnitOrder.DOTA_UNIT_ORDER_STOP,
+        nil,
+        nil,
+        nil,
+        Enum.PlayerOrderIssuer.DOTA_ORDER_ISSUER_HERO_ONLY,
+        hero,
+        false,
+        false
+    )
+end
+
 local function get_enabled_items()
     refresh_priority_order()
 
@@ -985,6 +1012,10 @@ local function cast_item(hero, item_key, game_time)
             end
 
             return CAST_RESULT_NONE
+        end
+
+        if definition.requires_facing then
+            stop_hero(hero)
         end
 
         Ability.CastTarget(item, hero, false, false, false, ESCAPE_ORDER_IDENTIFIER)
