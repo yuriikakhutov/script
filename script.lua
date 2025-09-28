@@ -24,6 +24,7 @@ end
 local activation_group = tab:Create("Activation")
 local priority_group = tab:Create("Item Priority", 1)
 local threshold_group = tab:Create("Item Thresholds", 2)
+local enemy_range_group = tab:Create("Enemy Range", 3)
 
 local ui = {
     enable = activation_group:Switch("Enable", true),
@@ -340,6 +341,9 @@ priority_widget:DragAllowed(true)
 priority_widget:ToolTip("Drag to reorder priority. Enable items you want to use.")
 
 local item_thresholds = {}
+local item_enemy_ranges = {}
+
+local DEFAULT_SEARCH_RANGE = 1200
 
 for _, item in ipairs(priority_items) do
     local key = item[1]
@@ -354,6 +358,29 @@ for _, item in ipairs(priority_items) do
                 return string.format("%d%%", value)
             end
         )
+
+        local needs_enemy_range =
+            definition.type == "target_enemy"
+            or definition.type == "position_enemy"
+            or definition.type == "escape_self"
+            or definition.requires_enemy
+
+        if needs_enemy_range then
+            local default_range = definition.range or definition.search_range or DEFAULT_SEARCH_RANGE
+            if not default_range or default_range <= 0 then
+                default_range = DEFAULT_SEARCH_RANGE
+            end
+
+            item_enemy_ranges[key] = enemy_range_group:Slider(
+                definition.display_name,
+                100,
+                3000,
+                math.floor(default_range + 0.5),
+                function(value)
+                    return string.format("%d units", value)
+                end
+            )
+        end
     end
 end
 
@@ -365,8 +392,6 @@ local CONTROL_BLOCKERS = {
     Enum.ModifierState.MODIFIER_STATE_HEXED,
     Enum.ModifierState.MODIFIER_STATE_MUTED,
 }
-
-local DEFAULT_SEARCH_RANGE = 1200
 
 local function can_use_item(hero)
     if not Entity.IsAlive(hero) then
@@ -446,8 +471,28 @@ local function get_effective_cast_range(hero, ability, definition)
     return range
 end
 
-local function find_enemy_target(hero, ability, definition)
+local function get_enemy_search_range(hero, ability, definition, item_key)
     local range = get_effective_cast_range(hero, ability, definition)
+
+    if item_key then
+        local slider = item_enemy_ranges[item_key]
+        if slider then
+            local configured = slider:Get()
+            if configured and configured > 0 then
+                if range <= 0 then
+                    range = configured
+                else
+                    range = math.min(range, configured)
+                end
+            end
+        end
+    end
+
+    return range
+end
+
+local function find_enemy_target(hero, ability, definition, item_key)
+    local range = get_enemy_search_range(hero, ability, definition, item_key)
     if range <= 0 then
         return nil
     end
@@ -534,6 +579,14 @@ local function normalize_flat_vector(vector)
     return vector
 end
 
+local function is_channelling(hero)
+    if not hero or not NPC or not NPC.IsChannellingAbility then
+        return false
+    end
+
+    return NPC.IsChannellingAbility(hero)
+end
+
 local function face_direction(hero, direction)
     if not hero or not direction then
         return
@@ -541,6 +594,10 @@ local function face_direction(hero, direction)
 
     local hero_pos = Entity.GetAbsOrigin(hero)
     if not hero_pos then
+        return
+    end
+
+    if is_channelling(hero) then
         return
     end
 
@@ -568,16 +625,13 @@ local function face_direction(hero, direction)
     )
 end
 
-local function get_escape_direction(hero, ability, definition)
+local function get_escape_direction(hero, ability, definition, item_key)
     local hero_pos = Entity.GetAbsOrigin(hero)
     if not hero_pos then
         return nil, nil
     end
 
-    local search_range = definition and definition.search_range or DEFAULT_SEARCH_RANGE
-    if ability then
-        search_range = math.max(search_range, get_effective_cast_range(hero, ability, definition))
-    end
+    local search_range = get_enemy_search_range(hero, ability, definition, item_key)
 
     local enemy = find_closest_enemy(hero, search_range)
     if not enemy then
@@ -668,7 +722,7 @@ local function cast_item(hero, item_key, game_time)
     end
 
     if definition.requires_enemy then
-        local range = get_effective_cast_range(hero, item, definition)
+        local range = get_enemy_search_range(hero, item, definition, item_key)
         local enemies = Entity.GetHeroesInRadius(hero, range, Enum.TeamType.TEAM_ENEMY, true, true)
         if not enemies or #enemies == 0 then
             return false
@@ -680,14 +734,14 @@ local function cast_item(hero, item_key, game_time)
     elseif definition.type == "target_self" then
         Ability.CastTarget(item, hero)
     elseif definition.type == "target_enemy" then
-        local target = find_enemy_target(hero, item, definition)
+        local target = find_enemy_target(hero, item, definition, item_key)
         if not target then
             return false
         end
 
         Ability.CastTarget(item, target)
     elseif definition.type == "position_enemy" then
-        local target = find_enemy_target(hero, item, definition)
+        local target = find_enemy_target(hero, item, definition, item_key)
         if not target then
             return false
         end
@@ -699,7 +753,7 @@ local function cast_item(hero, item_key, game_time)
 
         Ability.CastPosition(item, target_pos)
     elseif definition.type == "escape_self" then
-        local direction, enemy = get_escape_direction(hero, item, definition)
+        local direction, enemy = get_escape_direction(hero, item, definition, item_key)
         if not direction then
             clear_pending_escape(item_key)
             return false
@@ -713,22 +767,28 @@ local function cast_item(hero, item_key, game_time)
                 direction = direction,
                 enemy = enemy,
             }
-            face_direction(hero, direction)
+            if not is_channelling(hero) then
+                face_direction(hero, direction)
+            end
             return false
         end
 
         pending.direction = direction
 
         if game_time < pending.ready_time then
-            face_direction(hero, pending.direction)
+            if not is_channelling(hero) then
+                face_direction(hero, pending.direction)
+            end
             return false
         end
 
-        face_direction(hero, pending.direction)
+        if not is_channelling(hero) then
+            face_direction(hero, pending.direction)
+        end
         Ability.CastTarget(item, hero)
         clear_pending_escape(item_key)
     elseif definition.type == "escape_position" then
-        local direction = get_escape_direction(hero, item, definition)
+        local direction = get_escape_direction(hero, item, definition, item_key)
         if not direction then
             return false
         end
