@@ -30,8 +30,6 @@ local Config = {
     Scale = {
         GearDefault = 0.45,
         FallbackDefault = 0.4,
-        Min = 0.35,
-        Max = 1.0,
     },
 }
 
@@ -39,13 +37,7 @@ local tab
 local using_gear = false
 local gear_panel
 
-local MIN_WIDGET_SCALE = Config.Scale.Min
-local MAX_WIDGET_SCALE = Config.Scale.Max
-local current_widget_scale = Config.Scale.FallbackDefault
-local base_widget_scale = current_widget_scale
-local last_scale_percent = math.floor(current_widget_scale * 100 + 0.5)
-
-local scaled_widgets = setmetatable({}, { __mode = "k" })
+local compact_scale = Config.Scale.FallbackDefault
 
 local function call_widget_method(widget, method_name, ...)
     if not widget or type(method_name) ~= "string" then
@@ -61,28 +53,12 @@ local function call_widget_method(widget, method_name, ...)
     return ok and true or false
 end
 
-local function clamp_widget_scale(scale)
-    if type(scale) ~= "number" then
-        return current_widget_scale
-    end
-
-    if scale < MIN_WIDGET_SCALE then
-        return MIN_WIDGET_SCALE
-    end
-
-    if scale > MAX_WIDGET_SCALE then
-        return MAX_WIDGET_SCALE
-    end
-
-    return scale
-end
-
 local function set_widget_scale(widget, scale)
     if not widget then
         return
     end
 
-    local effective_scale = clamp_widget_scale(scale or current_widget_scale)
+    local effective_scale = scale or compact_scale
 
     if call_widget_method(widget, "SetScale", effective_scale) then
         return
@@ -116,27 +92,7 @@ local function apply_compact_style(widget, scale)
         return
     end
 
-    scaled_widgets[widget] = true
     set_widget_scale(widget, scale)
-end
-
-local function rescale_registered_widgets()
-    for widget in pairs(scaled_widgets) do
-        set_widget_scale(widget, current_widget_scale)
-    end
-end
-
-local function set_current_widget_scale(scale)
-    local clamped = clamp_widget_scale(scale)
-
-    if math.abs(clamped - current_widget_scale) < 0.0001 then
-        return
-    end
-
-    current_widget_scale = clamped
-    base_widget_scale = clamped
-
-    rescale_registered_widgets()
 end
 
 local function InitializeUI()
@@ -163,17 +119,14 @@ local function InitializeUI()
     end
 
     if using_gear then
-        current_widget_scale = Config.Scale.GearDefault
+        compact_scale = Config.Scale.GearDefault
     else
-        current_widget_scale = Config.Scale.FallbackDefault
+        compact_scale = Config.Scale.FallbackDefault
     end
 
-    base_widget_scale = current_widget_scale
-    last_scale_percent = math.floor(current_widget_scale * 100 + 0.5)
-
-    apply_compact_style(tab, current_widget_scale)
+    apply_compact_style(tab, compact_scale)
     if gear_panel then
-        apply_compact_style(gear_panel, current_widget_scale)
+        apply_compact_style(gear_panel, compact_scale)
     end
 
     local function create_submenu_group(key, opts)
@@ -257,12 +210,7 @@ local function InitializeUI()
         icon = Config.UI.Icons.EnemyRange,
     })
 
-    local MIN_WIDGET_SCALE_PERCENT = math.floor(MIN_WIDGET_SCALE * 100 + 0.5)
-    local MAX_WIDGET_SCALE_PERCENT = math.floor(MAX_WIDGET_SCALE * 100 + 0.5)
-
     local ui = {}
-
-    local scale_container = gear_panel or activation_group
 
     if activation_group then
         ui.enable = activation_group:Switch("Enable", true, Config.UI.Icons.Enable)
@@ -270,24 +218,6 @@ local function InitializeUI()
 
         apply_compact_style(ui.enable)
         apply_compact_style(ui.meteor_combo)
-    end
-
-    if scale_container then
-        ui.scale = scale_container:Slider(
-            "Interface Scale (%)",
-            MIN_WIDGET_SCALE_PERCENT,
-            MAX_WIDGET_SCALE_PERCENT,
-            last_scale_percent,
-            function(value)
-                return string.format("%d%%", value)
-            end
-        )
-
-        apply_compact_style(ui.scale)
-
-        if ui.scale and ui.scale.Set then
-            ui.scale:Set(last_scale_percent)
-        end
     end
 
     return {
@@ -302,10 +232,6 @@ local function InitializeUI()
             enemy_range = enemy_range_group,
         },
         ui = ui,
-        scale_bounds = {
-            min_percent = MIN_WIDGET_SCALE_PERCENT,
-            max_percent = MAX_WIDGET_SCALE_PERCENT,
-        },
     }
 end
 
@@ -322,9 +248,6 @@ local threshold_group = menu_context.groups.thresholds
 local enemy_range_group = menu_context.groups.enemy_range
 
 local ui = menu_context.ui
-
-local MIN_WIDGET_SCALE_PERCENT = menu_context.scale_bounds.min_percent
-local MAX_WIDGET_SCALE_PERCENT = menu_context.scale_bounds.max_percent
 
 local ITEM_DEFINITIONS = {
     glimmer = {
@@ -1198,32 +1121,6 @@ local function schedule_meteor_combo(game_time)
     meteor_combo_expire_time = game_time + METEOR_COMBO_MAX_DURATION
 end
 
-local function update_scale_from_slider()
-    local slider = ui.scale
-    if not slider or type(slider.Get) ~= "function" then
-        return
-    end
-
-    local value = slider:Get()
-    value = tonumber(value)
-    if not value then
-        return
-    end
-
-    if value < MIN_WIDGET_SCALE_PERCENT then
-        value = MIN_WIDGET_SCALE_PERCENT
-    elseif value > MAX_WIDGET_SCALE_PERCENT then
-        value = MAX_WIDGET_SCALE_PERCENT
-    end
-
-    if math.abs(value - last_scale_percent) < 0.5 then
-        return
-    end
-
-    last_scale_percent = value
-    set_current_widget_scale(value / 100.0)
-end
-
 local function can_use_item(hero)
     if not Entity.IsAlive(hero) then
         return false
@@ -1643,8 +1540,6 @@ local function cast_item(hero, item_key, game_time)
 end
 
 function auto_defender.OnUpdate()
-    update_scale_from_slider()
-
     if not Engine.IsInGame() then
         last_cast_times = {}
         next_cast_available_time = 0.0
