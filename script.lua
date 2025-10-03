@@ -190,42 +190,104 @@ local function ShouldAutoCast()
     return agent_script.ui.auto_cast and agent_script.ui.auto_cast:Get()
 end
 
-local function AcquireAttackTarget(center_pos, radius_override)
-    if not my_hero or not center_pos then
+local function FindAllyAnchor(unit)
+    if my_hero and Entity.IsAlive(my_hero) then
+        local hero_pos = Entity.GetAbsOrigin(my_hero)
+        return my_hero, hero_pos
+    end
+
+    if not unit or not my_hero then
+        return nil, nil
+    end
+
+    local hero_team = Entity.GetTeamNum(my_hero)
+    local unit_pos = Entity.GetAbsOrigin(unit)
+    if not unit_pos then
+        return nil, nil
+    end
+
+    local nearest_ally = nil
+    local best_distance = math.huge
+
+    for _, hero in ipairs(Heroes.GetAll()) do
+        if hero ~= my_hero and Entity.IsAlive(hero) and Entity.GetTeamNum(hero) == hero_team and not NPC.IsIllusion(hero) then
+            local hero_pos = Entity.GetAbsOrigin(hero)
+            if hero_pos then
+                local distance = unit_pos:Distance(hero_pos)
+                if distance < best_distance then
+                    best_distance = distance
+                    nearest_ally = hero
+                end
+            end
+        end
+    end
+
+    if nearest_ally then
+        return nearest_ally, Entity.GetAbsOrigin(nearest_ally)
+    end
+
+    return nil, nil
+end
+
+local function AcquireAttackTarget(unit_pos, anchor_pos, radius_override)
+    if not my_hero or not unit_pos then
         return nil
     end
 
     local hero_team = Entity.GetTeamNum(my_hero)
     local search_radius = radius_override or GetAttackRadius()
-    local enemies = NPCs.InRadius(center_pos, search_radius, hero_team, Enum.TeamType.TEAM_ENEMY) or {}
+    local centers = {}
 
-    local best_target = nil
-    local best_score = -math.huge
-
-    for _, enemy in ipairs(enemies) do
-        if Entity.IsAlive(enemy) and not NPC.IsCourier(enemy) then
-            local enemy_pos = Entity.GetAbsOrigin(enemy)
-            local distance = center_pos:Distance(enemy_pos)
-            local score = -distance
-
-            if NPC.IsHero(enemy) then
-                score = score + 1000
-            elseif NPC.IsCreep(enemy) then
-                if NPC.IsLaneCreep(enemy) then
-                    score = score - 50
-                else
-                    score = score + 100
-                end
-            end
-
-            if score > best_score then
-                best_score = score
-                best_target = enemy
-            end
-        end
+    if anchor_pos then
+        centers[#centers + 1] = anchor_pos
     end
 
-    return best_target
+    centers[#centers + 1] = unit_pos
+
+    local function FindBest(team_type, predicate)
+        local best_target = nil
+        local best_distance = math.huge
+
+        for _, center in ipairs(centers) do
+            local units = NPCs.InRadius(center, search_radius, hero_team, team_type) or {}
+            for _, candidate in ipairs(units) do
+                if Entity.IsAlive(candidate) and not NPC.IsCourier(candidate) and Entity.GetTeamNum(candidate) ~= hero_team and predicate(candidate) then
+                    local candidate_pos = Entity.GetAbsOrigin(candidate)
+                    if candidate_pos then
+                        local distance = center:Distance(candidate_pos)
+                        if distance < best_distance then
+                            best_distance = distance
+                            best_target = candidate
+                        end
+                    end
+                end
+            end
+        end
+
+        return best_target
+    end
+
+    local target = FindBest(Enum.TeamType.TEAM_ENEMY, function(enemy)
+        return NPC.IsHero(enemy)
+    end)
+
+    if target then
+        return target
+    end
+
+    target = FindBest(Enum.TeamType.TEAM_ENEMY, function(enemy)
+        return NPC.IsCreep(enemy)
+    end)
+
+    if target then
+        return target
+    end
+
+    target = FindBest(Enum.TeamType.TEAM_NEUTRAL, function(enemy)
+        return NPC.IsCreep(enemy)
+    end)
+
+    return target
 end
 
 local function GetUnitHealthPercent(unit)
@@ -437,18 +499,22 @@ local function CountEnemiesAround(position, radius)
     end
 
     local hero_team = Entity.GetTeamNum(my_hero)
-    local enemies = NPCs.InRadius(position, radius, hero_team, Enum.TeamType.TEAM_ENEMY) or {}
     local total = 0
     local hero_count = 0
 
-    for _, enemy in ipairs(enemies) do
-        if Entity.IsAlive(enemy) and not NPC.IsCourier(enemy) then
-            total = total + 1
-            if NPC.IsHero(enemy) then
-                hero_count = hero_count + 1
+    local function Accumulate(units)
+        for _, enemy in ipairs(units) do
+            if Entity.IsAlive(enemy) and not NPC.IsCourier(enemy) and Entity.GetTeamNum(enemy) ~= hero_team then
+                total = total + 1
+                if NPC.IsHero(enemy) then
+                    hero_count = hero_count + 1
+                end
             end
         end
     end
+
+    Accumulate(NPCs.InRadius(position, radius, hero_team, Enum.TeamType.TEAM_ENEMY) or {})
+    Accumulate(NPCs.InRadius(position, radius, hero_team, Enum.TeamType.TEAM_NEUTRAL) or {})
 
     return total, hero_count
 end
@@ -770,7 +836,11 @@ local function IssueFollowOrders()
         return
     end
 
-    local hero_pos = Entity.GetAbsOrigin(my_hero)
+    local hero_pos = nil
+    if Entity.IsAlive(my_hero) then
+        hero_pos = Entity.GetAbsOrigin(my_hero)
+    end
+
     local current_time = GlobalVars.GetCurTime()
 
     local follow_distance = GetFollowDistance()
@@ -786,14 +856,24 @@ local function IssueFollowOrders()
             end
 
             local unit_pos = Entity.GetAbsOrigin(unit)
-            local distance = hero_pos:Distance(unit_pos)
+            local anchor_unit, anchor_pos = FindAllyAnchor(unit)
+            local anchor_distance = nil
+            if anchor_pos and unit_pos then
+                anchor_distance = unit_pos:Distance(anchor_pos)
+            elseif hero_pos and unit_pos then
+                anchor_distance = unit_pos:Distance(hero_pos)
+            end
+
+            local leash_target = anchor_pos or hero_pos
 
             local current_target = nil
             if ShouldAutoAttack() then
-                current_target = AcquireAttackTarget(unit_pos)
-                if not current_target then
-                    current_target = AcquireAttackTarget(hero_pos)
-                end
+                current_target = AcquireAttackTarget(unit_pos, leash_target)
+            end
+
+            local leash_threshold = follow_distance + 75
+            if anchor_unit and current_target and anchor_unit ~= current_target and anchor_distance and anchor_distance > leash_threshold then
+                current_target = nil
             end
 
             local ability_cast = TryUseAbilities(unit, current_target)
@@ -820,21 +900,41 @@ local function IssueFollowOrders()
                 local target_name = NPC.GetUnitName(current_target) or "цель"
                 follower.last_action = string.format("Атакую: %s", target_name)
                 follower.next_action_time = current_time + ORDER_COOLDOWN
-            elseif distance > follow_distance then
-                Player.PrepareUnitOrders(
-                    local_player,
-                    Enum.UnitOrder.DOTA_UNIT_ORDER_MOVE_TO_POSITION,
-                    nil,
-                    hero_pos,
-                    nil,
-                    Enum.PlayerOrderIssuer.DOTA_ORDER_ISSUER_PASSED_UNIT_ONLY,
-                    unit
-                )
-                follower.last_action = "Двигаюсь к герою"
-                follower.next_action_time = current_time + ORDER_COOLDOWN
             else
-                follower.last_action = "В радиусе"
-                follower.next_action_time = current_time + ORDER_COOLDOWN
+                local move_position = leash_target
+                if not move_position and hero_pos then
+                    move_position = hero_pos
+                end
+
+                if move_position and anchor_distance and anchor_distance > follow_distance then
+                    Player.PrepareUnitOrders(
+                        local_player,
+                        Enum.UnitOrder.DOTA_UNIT_ORDER_MOVE_TO_POSITION,
+                        nil,
+                        move_position,
+                        nil,
+                        Enum.PlayerOrderIssuer.DOTA_ORDER_ISSUER_PASSED_UNIT_ONLY,
+                        unit
+                    )
+                    if anchor_unit then
+                        local anchor_name = NPC.GetUnitName(anchor_unit) or "союзник"
+                        follower.last_action = string.format("Следую к: %s", anchor_name)
+                    else
+                        follower.last_action = "Двигаюсь к герою"
+                    end
+                    follower.next_action_time = current_time + ORDER_COOLDOWN
+                elseif move_position then
+                    if anchor_unit then
+                        local anchor_name = NPC.GetUnitName(anchor_unit) or "союзник"
+                        follower.last_action = string.format("Рядом с: %s", anchor_name)
+                    else
+                        follower.last_action = "В радиусе"
+                    end
+                    follower.next_action_time = current_time + ORDER_COOLDOWN
+                else
+                    follower.last_action = "Ожидаю"
+                    follower.next_action_time = current_time + ORDER_COOLDOWN
+                end
             end
         end
         ::continue::
@@ -856,7 +956,7 @@ function agent_script.OnUpdate()
     my_hero = Heroes.GetLocal()
     local_player = Players.GetLocal()
 
-    if not my_hero or not Entity.IsAlive(my_hero) or not local_player then
+    if not my_hero or not local_player then
         ResetState()
         return
     end
