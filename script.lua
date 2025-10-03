@@ -15,6 +15,8 @@ local agent_manager = {}
 local shared_attack_target = nil
 local shared_attack_position = nil
 local shared_command_expire_time = 0
+local next_selection_sync_time = 0
+local last_selection_trigger_time = 0
 
 local function clamp(value, min_value, max_value)
     if value < min_value then
@@ -41,6 +43,78 @@ local function ClearSharedCommand()
     shared_attack_target = nil
     shared_attack_position = nil
     shared_command_expire_time = 0
+end
+
+local function SyncSelectedUnits()
+    if not agent_script.ui.auto_select_creeps or not agent_script.ui.auto_select_creeps:Get() then
+        return
+    end
+
+    if not local_player then
+        return
+    end
+
+    local time_now = GlobalVars.GetCurTime()
+    if time_now < next_selection_sync_time then
+        return
+    end
+
+    local should_have_selection = false
+    for _, agent in pairs(agent_manager) do
+        if agent.unit and Entity.IsAlive(agent.unit) then
+            should_have_selection = true
+            break
+        end
+    end
+
+    if not should_have_selection then
+        return
+    end
+
+    local selected_units = Player.GetSelectedUnits(local_player) or {}
+    local selected_lookup = {}
+    for _, unit in ipairs(selected_units) do
+        selected_lookup[Entity.GetIndex(unit)] = true
+    end
+
+    local needs_refresh = false
+    if my_hero and selected_lookup[Entity.GetIndex(my_hero)] then
+        needs_refresh = true
+    end
+
+    for handle, agent in pairs(agent_manager) do
+        if agent.unit and Entity.IsAlive(agent.unit) then
+            if not selected_lookup[handle] then
+                needs_refresh = true
+                break
+            end
+            selected_lookup[handle] = nil
+        end
+    end
+
+    if not needs_refresh then
+        for handle in pairs(selected_lookup) do
+            if not my_hero or handle ~= Entity.GetIndex(my_hero) then
+                needs_refresh = true
+                break
+            end
+        end
+    end
+
+    if not needs_refresh then
+        next_selection_sync_time = time_now + 0.5
+        return
+    end
+
+    Player.ClearSelectedUnits(local_player)
+    for _, agent in pairs(agent_manager) do
+        if agent.unit and Entity.IsAlive(agent.unit) then
+            Player.AddSelectedUnit(local_player, agent.unit)
+        end
+    end
+
+    next_selection_sync_time = time_now + 0.5
+    last_selection_trigger_time = time_now
 end
 
 local function SetSharedAttackTarget(target)
@@ -404,6 +478,7 @@ local function CreateMenu()
     agent_script.ui.enable = settings_group:Switch("Включить AI", true, "\u{f544}")
     agent_script.ui.debug_draw = settings_group:Switch("Отображать отладку", true, "\u{f05a}")
     agent_script.ui.default_follow_distance = settings_group:Slider("Дистанция следования (по умолчанию)", 150, 600, 300, "%d")
+    agent_script.ui.auto_select_creeps = settings_group:Switch("Авто-выделять крипов (без героя)", true, "\u{f24d}")
 
     agent_script.ui.creep_settings = {}
 
@@ -769,11 +844,15 @@ end
 function agent_script.OnUpdate()
     if not agent_script.ui.enable or not agent_script.ui.enable:Get() then
         ClearSharedCommand()
+        next_selection_sync_time = 0
+        last_selection_trigger_time = 0
         return
     end
 
     if not Engine.IsInGame() then
         ClearSharedCommand()
+        next_selection_sync_time = 0
+        last_selection_trigger_time = 0
         return
     end
 
@@ -784,6 +863,8 @@ function agent_script.OnUpdate()
     if not my_hero or not Entity.IsAlive(my_hero) or not local_player then
         agent_manager = {}
         ClearSharedCommand()
+        next_selection_sync_time = 0
+        last_selection_trigger_time = 0
         return
     end
 
@@ -793,6 +874,7 @@ function agent_script.OnUpdate()
     end
 
     RefreshAgents()
+    SyncSelectedUnits()
 
     for handle, agent in pairs(agent_manager) do
         if agent and Entity.IsAlive(agent.unit) then
@@ -893,7 +975,14 @@ function agent_script.OnPrepareUnitOrders(data)
     end
 
     local selected_units = Player.GetSelectedUnits(player)
-    if selected_units then
+    local skip_manual_override = false
+    if agent_script.ui.auto_select_creeps and agent_script.ui.auto_select_creeps:Get() then
+        if last_selection_trigger_time > 0 and time_now - last_selection_trigger_time < 0.25 then
+            skip_manual_override = true
+        end
+    end
+
+    if selected_units and not skip_manual_override then
         for _, unit in ipairs(selected_units) do
             local handle = Entity.GetIndex(unit)
             local agent = agent_manager[handle]
@@ -912,6 +1001,8 @@ function agent_script.OnGameEnd()
     local_player = nil
     local_player_id = nil
     ClearSharedCommand()
+    next_selection_sync_time = 0
+    last_selection_trigger_time = 0
 end
 
 InitializeCreepData()
