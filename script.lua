@@ -24,15 +24,27 @@ local function EnsureMenu()
         return
     end
 
-    scripts_tab:Icon("\u{f0c1}")
-
-    local main_group = scripts_tab:Create("Основные настройки")
-    if not main_group then
-        return
+    if type(scripts_tab.Icon) == "function" then
+        scripts_tab:Icon("\u{f0c1}")
     end
 
-    local switch_fn = type(main_group.Switch) == "function" and main_group.Switch or nil
-    local slider_fn = type(main_group.Slider) == "function" and main_group.Slider or nil
+    local main_group = nil
+    if type(scripts_tab.Create) == "function" then
+        main_group = scripts_tab:Create("Основные настройки")
+    end
+
+    local target_group = main_group or scripts_tab
+
+    if target_group and type(target_group.Create) == "function" then
+        local nested_group = target_group:Create("Поведение")
+        if nested_group then
+            target_group = nested_group
+        end
+    end
+
+    if not target_group then
+        return
+    end
 
     local function ApplyTooltip(control, text)
         if control and type(control.ToolTip) == "function" then
@@ -40,18 +52,18 @@ local function EnsureMenu()
         end
     end
 
-    if switch_fn then
-        agent_script.ui.enable = switch_fn(main_group, "Включить скрипт", true, "\u{f205}")
+    if type(target_group.Switch) == "function" then
+        agent_script.ui.enable = target_group:Switch("Включить скрипт", true, "\u{f205}")
         ApplyTooltip(agent_script.ui.enable, "Автоматически перемещать всех контролируемых юнитов к герою.")
     end
 
-    if slider_fn then
-        agent_script.ui.follow_distance = slider_fn(main_group, "Дистанция следования", 100, 800, DEFAULT_FOLLOW_DISTANCE, "%d")
+    if type(target_group.Slider) == "function" then
+        agent_script.ui.follow_distance = target_group:Slider("Дистанция следования", 100, 800, DEFAULT_FOLLOW_DISTANCE, "%d")
         ApplyTooltip(agent_script.ui.follow_distance, "На каком расстоянии от героя должны находиться контролируемые юниты.")
     end
 
-    if switch_fn then
-        agent_script.ui.debug = switch_fn(main_group, "Отображать отладку", true, "\u{f05a}")
+    if type(target_group.Switch) == "function" then
+        agent_script.ui.debug = target_group:Switch("Отображать отладку", true, "\u{f05a}")
         ApplyTooltip(agent_script.ui.debug, "Показывать текстовое состояние над юнитами.")
     end
 
