@@ -5,6 +5,7 @@ agent_script.ui = {}
 local DEFAULT_FOLLOW_DISTANCE = 300
 local DEFAULT_ATTACK_RADIUS = 900
 local ORDER_COOLDOWN = 0.3
+local FOLLOW_PRIORITY_BUFFER = 0
 
 local TEAM_NEUTRAL = Enum.TeamNum and Enum.TeamNum.TEAM_NEUTRAL or 4
 
@@ -1011,6 +1012,19 @@ local function TryCastAbilities(follower, unit, context, current_time)
             local ability_name = Ability.GetName(ability)
             local metadata = GetAbilityMetadata(ability_name)
             if metadata and IsAbilityReady(unit, ability, metadata) then
+                if context.follow_priority then
+                    local skip = true
+                    if metadata.target == "ally" then
+                        skip = false
+                    elseif metadata.always_cast then
+                        skip = false
+                    end
+
+                    if skip then
+                        goto continue_ability
+                    end
+                end
+
                 local success, message = TryCastAbility(context, ability, metadata)
                 if success then
                     follower.last_action = message
@@ -1217,7 +1231,7 @@ local function IssueFollowOrders()
     local auto_attack = ShouldAutoAttack()
     local allow_creep_targets = AllowCreepTargets()
 
-    local hero_pos = my_hero and Entity.GetAbsOrigin(my_hero)
+    local hero_pos = my_hero and Entity.IsAlive(my_hero) and Entity.GetAbsOrigin(my_hero) or nil
 
     for _, follower in pairs(followers) do
         local unit = follower.unit
@@ -1242,7 +1256,15 @@ local function IssueFollowOrders()
             anchor_distance = unit_pos:Distance(leash_target)
         end
 
-        local need_target = auto_attack or (agent_script.ui.auto_cast and agent_script.ui.auto_cast:Get())
+        local follow_priority = false
+        if leash_target and anchor_distance then
+            local leash_limit = follow_distance + FOLLOW_PRIORITY_BUFFER
+            if anchor_distance > leash_limit then
+                follow_priority = true
+            end
+        end
+
+        local need_target = (not follow_priority) and (auto_attack or (agent_script.ui.auto_cast and agent_script.ui.auto_cast:Get()))
         local current_target = nil
         if need_target then
             current_target = AcquireAttackTarget(unit_pos, leash_target, attack_radius)
@@ -1256,6 +1278,7 @@ local function IssueFollowOrders()
             current_target = current_target,
             hero_team = Entity.GetTeamNum(my_hero),
             allow_creeps = allow_creep_targets,
+            follow_priority = follow_priority,
         }
 
         if TryCastAbilities(follower, unit, context, current_time) then
