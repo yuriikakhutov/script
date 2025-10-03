@@ -9,6 +9,7 @@ local STATES = {
 }
 
 local my_hero, local_player = nil, nil
+local local_player_id = nil
 local font = nil
 local agent_manager = {}
 local shared_attack_target = nil
@@ -87,7 +88,7 @@ local function IsDominatedCreep(unit)
         return false
     end
 
-    if local_player and not NPC.IsControllableByPlayer(unit, local_player) then
+    if local_player_id and not NPC.IsControllableByPlayer(unit, local_player_id) then
         return false
     end
 
@@ -361,7 +362,7 @@ local function CleanupAgents()
     for handle, agent in pairs(agent_manager) do
         if not agent.unit or not Entity.IsAlive(agent.unit) then
             agent_manager[handle] = nil
-        elseif not NPC.IsControllableByPlayer(agent.unit, local_player or Players.GetLocal()) then
+        elseif local_player_id and not NPC.IsControllableByPlayer(agent.unit, local_player_id) then
             agent_manager[handle] = nil
         elseif not agent_script.creep_data[NPC.GetUnitName(agent.unit) or ""] then
             agent_manager[handle] = nil
@@ -778,11 +779,17 @@ function agent_script.OnUpdate()
 
     my_hero = Heroes.GetLocal()
     local_player = Players.GetLocal()
+    local_player_id = nil
 
     if not my_hero or not Entity.IsAlive(my_hero) or not local_player then
         agent_manager = {}
         ClearSharedCommand()
         return
+    end
+
+    local_player_id = Hero.GetPlayerID(my_hero)
+    if local_player_id == nil then
+        local_player_id = Player.GetPlayerID(local_player)
     end
 
     RefreshAgents()
@@ -903,6 +910,7 @@ function agent_script.OnGameEnd()
     agent_manager = {}
     my_hero = nil
     local_player = nil
+    local_player_id = nil
     ClearSharedCommand()
 end
 
