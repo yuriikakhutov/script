@@ -375,12 +375,11 @@ local OGRE_SMASH_METADATA = {
 }
 
 local DARK_TROLL_RAISE_DEAD_METADATA = {
-    type = "point",
+    type = "no_target",
     display = "Raise Dead",
     requires_charges = true,
     always_cast = true,
-    cast_self = true,
-    fixed_range = 800,
+    min_enemies = 0,
 }
 
 local ABILITY_DATA = {
