@@ -6,13 +6,6 @@ local DEFAULT_FOLLOW_DISTANCE = 300
 local DEFAULT_ATTACK_RADIUS = 900
 local ORDER_COOLDOWN = 0.3
 
-local bit_lib = bit32 or bit
-local ABILITY_BEHAVIOR_UNIT_TARGET = (Enum.AbilityBehavior and Enum.AbilityBehavior.DOTA_ABILITY_BEHAVIOR_UNIT_TARGET) or 0
-local ABILITY_BEHAVIOR_NO_TARGET = (Enum.AbilityBehavior and Enum.AbilityBehavior.DOTA_ABILITY_BEHAVIOR_NO_TARGET) or 0
-local TARGET_TEAM_ENEMY = Enum.TargetTeam and Enum.TargetTeam.TEAM_ENEMY
-local TARGET_TEAM_BOTH = Enum.TargetTeam and Enum.TargetTeam.TEAM_BOTH
-local TARGET_TEAM_FRIENDLY = Enum.TargetTeam and Enum.TargetTeam.TEAM_FRIENDLY
-
 local my_hero = nil
 local local_player = nil
 local local_player_id = nil
@@ -235,64 +228,158 @@ local function AcquireAttackTarget(hero_pos)
     return best_target
 end
 
-local function AbilityTargetsEnemies(ability)
-    if not ability then
-        return false
+local ABILITY_DATA = {
+    mud_golem_hurl_boulder = {
+        type = "target",
+        display = "Hurl Boulder",
+        range_buffer = 50,
+    },
+    ancient_rock_golem_hurl_boulder = {
+        type = "target",
+        display = "Ancient Boulder",
+        range_buffer = 75,
+    },
+    dark_troll_warlord_ensnare = {
+        type = "target",
+        display = "Ensnare",
+        range_buffer = 25,
+        only_heroes = true,
+    },
+    harpy_storm_chain_lightning = {
+        type = "target",
+        display = "Chain Lightning",
+        range_buffer = 50,
+    },
+    satyr_mindstealer_mana_burn = {
+        type = "target",
+        display = "Mana Burn",
+        range_buffer = 25,
+        only_heroes = true,
+        min_mana_on_target = 75,
+    },
+    satyr_soulstealer_mana_burn = {
+        type = "target",
+        display = "Mana Burn",
+        range_buffer = 25,
+        only_heroes = true,
+        min_mana_on_target = 75,
+    },
+    satyr_hellcaller_shockwave = {
+        type = "point",
+        display = "Shockwave",
+        fixed_range = 800,
+    },
+    centaur_khan_war_stomp = {
+        type = "no_target",
+        display = "War Stomp",
+        radius = 315,
+        min_enemies = 1,
+    },
+    polar_furbolg_ursa_warrior_thunder_clap = {
+        type = "no_target",
+        display = "Thunder Clap",
+        radius = 315,
+        min_enemies = 1,
+    },
+    hellbear_smasher_slam = {
+        type = "no_target",
+        display = "Slam",
+        radius = 350,
+        min_enemies = 1,
+    },
+    black_dragon_fireball = {
+        type = "point",
+        display = "Fireball",
+        fixed_range = 750,
+    },
+    ancient_black_dragon_fireball = {
+        type = "point",
+        display = "Fireball",
+        fixed_range = 750,
+    },
+    ogre_magi_frost_armor = {
+        type = "ally_target",
+        display = "Frost Armor",
+        buff_modifier = "modifier_ogre_magi_frost_armor",
+        prefer_hero = true,
+    },
+}
+
+local function GetAbilityMetadata(name)
+    if not name then
+        return nil
     end
 
-    local target_team = Ability.GetTargetTeam and Ability.GetTargetTeam(ability)
-    if target_team == TARGET_TEAM_ENEMY or target_team == TARGET_TEAM_BOTH then
-        return true
-    end
-
-    if target_team ~= nil then
-        if TARGET_TEAM_ENEMY == nil and TARGET_TEAM_BOTH == nil then
-            if TARGET_TEAM_FRIENDLY and target_team == TARGET_TEAM_FRIENDLY then
-                return false
-            end
-            return true
-        end
-    end
-
-    local behavior = Ability.GetBehavior and Ability.GetBehavior(ability)
-    if behavior and bit_lib and ABILITY_BEHAVIOR_UNIT_TARGET ~= 0 then
-        if bit_lib.band(behavior, ABILITY_BEHAVIOR_UNIT_TARGET) ~= 0 then
-            if target_team == nil then
-                return true
-            end
-        end
-    end
-
-    return false
+    return ABILITY_DATA[name]
 end
 
-local function IsInCastRange(unit, target, ability)
-    if not ability or not unit or not target then
-        return false
-    end
-
-    local cast_range = Ability.GetCastRange and Ability.GetCastRange(ability)
-    if not cast_range or cast_range <= 0 then
-        local behavior = Ability.GetBehavior and Ability.GetBehavior(ability)
-        if behavior and bit_lib and ABILITY_BEHAVIOR_NO_TARGET ~= 0 then
-            if bit_lib.band(behavior, ABILITY_BEHAVIOR_NO_TARGET) ~= 0 then
-                return false
-            end
-        end
-        return true
-    end
-
-    local unit_pos = Entity.GetAbsOrigin(unit)
-    local target_pos = Entity.GetAbsOrigin(target)
+local function IsInExtendedRange(unit_pos, target_pos, ability, metadata)
     if not unit_pos or not target_pos then
         return false
     end
 
-    return unit_pos:Distance(target_pos) <= (cast_range + 50)
+    local buffer = (metadata and metadata.range_buffer) or 0
+    local fixed_range = metadata and metadata.fixed_range
+    local cast_range = fixed_range or (Ability.GetCastRange and Ability.GetCastRange(ability)) or 0
+
+    if cast_range <= 0 then
+        cast_range = (metadata and metadata.radius) or 250
+    end
+
+    return unit_pos:Distance(target_pos) <= (cast_range + buffer)
 end
 
-local function CastTargetedAbilities(unit, target)
-    if not ShouldAutoCast() or not unit or not target then
+local function CountEnemiesAround(position, radius)
+    if not my_hero or not position or radius <= 0 then
+        return 0, 0
+    end
+
+    local hero_team = Entity.GetTeamNum(my_hero)
+    local enemies = NPCs.InRadius(position, radius, hero_team, Enum.TeamType.TEAM_ENEMY) or {}
+    local total = 0
+    local hero_count = 0
+
+    for _, enemy in ipairs(enemies) do
+        if Entity.IsAlive(enemy) and not NPC.IsCourier(enemy) then
+            total = total + 1
+            if NPC.IsHero(enemy) then
+                hero_count = hero_count + 1
+            end
+        end
+    end
+
+    return total, hero_count
+end
+
+local function ChooseAllyTarget(unit, metadata)
+    if not metadata then
+        return nil
+    end
+
+    if metadata.prefer_hero and my_hero and Entity.IsAlive(my_hero) then
+        return my_hero
+    end
+
+    local unit_pos = unit and Entity.GetAbsOrigin(unit)
+    if not unit_pos then
+        return nil
+    end
+
+    local hero_team = my_hero and Entity.GetTeamNum(my_hero)
+    local allies = NPCs.InRadius(unit_pos, 900, hero_team, Enum.TeamType.TEAM_FRIEND)
+    if allies then
+        for _, ally in ipairs(allies) do
+            if Entity.IsAlive(ally) and not NPC.IsCourier(ally) and ally ~= unit then
+                return ally
+            end
+        end
+    end
+
+    return nil
+end
+
+local function TryCastAbility(unit, ability, metadata, current_target)
+    if not metadata then
         return nil
     end
 
@@ -301,15 +388,90 @@ local function CastTargetedAbilities(unit, target)
     end
 
     local mana = NPC.GetMana(unit)
+    if not Ability.IsReady(ability) or not Ability.IsCastable(ability, mana) then
+        return nil
+    end
+
+    local ability_name = Ability.GetName(ability) or "ability"
+    local unit_pos = Entity.GetAbsOrigin(unit)
+
+    if metadata.type == "target" then
+        local target = current_target
+        if metadata.only_heroes and target and not NPC.IsHero(target) then
+            target = nil
+        end
+
+        if not target or not Entity.IsAlive(target) then
+            return nil
+        end
+
+        if metadata.min_mana_on_target and NPC.GetMana(target) < metadata.min_mana_on_target then
+            return nil
+        end
+
+        local target_pos = Entity.GetAbsOrigin(target)
+        if not IsInExtendedRange(unit_pos, target_pos, ability, metadata) then
+            return nil
+        end
+
+        Ability.CastTarget(ability, target)
+        return metadata.display or ability_name
+    elseif metadata.type == "point" then
+        local target = current_target
+        if not target or not Entity.IsAlive(target) then
+            return nil
+        end
+
+        local target_pos = Entity.GetAbsOrigin(target)
+        if not IsInExtendedRange(unit_pos, target_pos, ability, metadata) then
+            return nil
+        end
+
+        Ability.CastPosition(ability, target_pos)
+        return metadata.display or ability_name
+    elseif metadata.type == "no_target" then
+        local radius = metadata.radius or (Ability.GetCastRange and Ability.GetCastRange(ability)) or 0
+        if radius <= 0 then
+            radius = 250
+        end
+
+        local total, hero_count = CountEnemiesAround(unit_pos, radius)
+        local relevant_count = metadata.only_heroes and hero_count or total
+        if relevant_count < (metadata.min_enemies or 1) then
+            return nil
+        end
+
+        Ability.CastNoTarget(ability)
+        return metadata.display or ability_name
+    elseif metadata.type == "ally_target" then
+        local ally = ChooseAllyTarget(unit, metadata)
+        if not ally or not Entity.IsAlive(ally) then
+            return nil
+        end
+
+        if metadata.buff_modifier and NPC.HasModifier(ally, metadata.buff_modifier) then
+            return nil
+        end
+
+        Ability.CastTarget(ability, ally)
+        return metadata.display or ability_name
+    end
+
+    return nil
+end
+
+local function TryUseAbilities(unit, current_target)
+    if not ShouldAutoCast() or not unit then
+        return nil
+    end
 
     for slot = 0, 5 do
         local ability = NPC.GetAbilityByIndex(unit, slot)
         if ability and Ability.GetLevel(ability) > 0 then
-            if Ability.IsReady(ability) and Ability.IsCastable(ability, mana) then
-                if AbilityTargetsEnemies(ability) and IsInCastRange(unit, target, ability) then
-                    Ability.CastTarget(ability, target)
-                    return Ability.GetName(ability) or "ability"
-                end
+            local metadata = GetAbilityMetadata(Ability.GetName(ability))
+            local cast_name = TryCastAbility(unit, ability, metadata, current_target)
+            if cast_name then
+                return cast_name
             end
         end
     end
@@ -347,7 +509,7 @@ local function IssueFollowOrders()
             local distance = hero_pos:Distance(unit_pos)
 
             if current_target and Entity.IsAlive(current_target) then
-                local ability_cast = CastTargetedAbilities(unit, current_target)
+                local ability_cast = TryUseAbilities(unit, current_target)
                 if ability_cast then
                     follower.last_action = string.format("Использую: %s", ability_cast)
                     follower.next_action_time = current_time + ORDER_COOLDOWN
@@ -379,6 +541,13 @@ local function IssueFollowOrders()
                 follower.last_action = "Двигаюсь к герою"
                 follower.next_action_time = current_time + ORDER_COOLDOWN
             else
+                local ability_cast = TryUseAbilities(unit, nil)
+                if ability_cast then
+                    follower.last_action = string.format("Использую: %s", ability_cast)
+                    follower.next_action_time = current_time + ORDER_COOLDOWN
+                    goto continue
+                end
+
                 follower.last_action = "В радиусе"
                 follower.next_action_time = current_time + ORDER_COOLDOWN
             end
