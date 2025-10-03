@@ -374,6 +374,15 @@ local OGRE_SMASH_METADATA = {
     range_buffer = 50,
 }
 
+local DARK_TROLL_RAISE_DEAD_METADATA = {
+    type = "no_target",
+    display = "Raise Dead",
+    requires_charges = true,
+    always_cast = true,
+    min_enemies = 0,
+    ignore_is_castable = true,
+}
+
 local ABILITY_DATA = {
     mud_golem_hurl_boulder = {
         type = "target",
@@ -389,7 +398,7 @@ local ABILITY_DATA = {
         type = "target",
         display = "Ensnare",
         range_buffer = 25,
-        only_heroes = true,
+        requires_current_target = true,
     },
     harpy_storm_chain_lightning = {
         type = "target",
@@ -451,6 +460,8 @@ local ABILITY_DATA = {
     },
     ogre_mauler_smash = OGRE_SMASH_METADATA,
     ogre_bruiser_ogre_smash = OGRE_SMASH_METADATA,
+    dark_troll_warlord_raise_dead = DARK_TROLL_RAISE_DEAD_METADATA,
+    dark_troll_summoner_raise_dead = DARK_TROLL_RAISE_DEAD_METADATA,
     forest_troll_high_priest_heal = {
         type = "ally_target",
         display = "Heal",
@@ -723,7 +734,7 @@ local function TryCastAbility(unit, ability, metadata, current_target)
             end
         end
 
-        if not target then
+        if not target and not metadata.requires_current_target then
             local hero_team = my_hero and Entity.GetTeamNum(my_hero)
             local search_radius = (metadata.fixed_range or (Ability.GetCastRange and Ability.GetCastRange(ability)) or 600)
             search_radius = search_radius + (metadata.range_buffer or 0) + (metadata.search_radius_bonus or 0)
