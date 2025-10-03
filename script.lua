@@ -284,6 +284,13 @@ local function GetAbilityCharges(ability)
     return nil
 end
 
+local OGRE_SMASH_METADATA = {
+    type = "point",
+    display = "Ogre Smash",
+    fixed_range = 350,
+    range_buffer = 50,
+}
+
 local ABILITY_DATA = {
     mud_golem_hurl_boulder = {
         type = "target",
@@ -359,12 +366,8 @@ local ABILITY_DATA = {
         buff_modifier = "modifier_ogre_magi_frost_armor",
         prefer_hero = true,
     },
-    ogre_mauler_smash = {
-        type = "point",
-        display = "Ogre Smash",
-        fixed_range = 350,
-        range_buffer = 50,
-    },
+    ogre_mauler_smash = OGRE_SMASH_METADATA,
+    ogre_bruiser_ogre_smash = OGRE_SMASH_METADATA,
     forest_troll_high_priest_heal = {
         type = "ally_target",
         display = "Heal",
@@ -377,6 +380,7 @@ local ABILITY_DATA = {
         display = "Raise Dead",
         requires_charges = true,
         min_enemies = 0,
+        always_cast = true,
     },
     axe_berserkers_call = {
         type = "no_target",
@@ -725,10 +729,11 @@ local function TryCastAbility(unit, ability, metadata, current_target)
 end
 
 local function TryUseAbilities(unit, current_target)
-    if not ShouldAutoCast() or not unit then
+    if not unit then
         return nil
     end
 
+    local auto_cast_enabled = ShouldAutoCast()
     local ability_count = (NPC.GetAbilityCount and NPC.GetAbilityCount(unit)) or 0
     if ability_count <= 0 then
         ability_count = 6
@@ -739,12 +744,22 @@ local function TryUseAbilities(unit, current_target)
     for slot = 0, max_slots - 1 do
         local ability = NPC.GetAbilityByIndex(unit, slot)
         if ability and Ability.GetLevel(ability) > 0 then
-            local metadata = GetAbilityMetadata(Ability.GetName(ability))
-            local cast_name = TryCastAbility(unit, ability, metadata, current_target)
-            if cast_name then
-                return cast_name
+            local ability_name = Ability.GetName(ability)
+            local metadata = GetAbilityMetadata(ability_name)
+
+            if metadata and (auto_cast_enabled or metadata.always_cast) then
+                if type(Ability.IsReady) == "function" and not Ability.IsReady(ability) then
+                    goto continue_ability
+                end
+
+                local cast_name = TryCastAbility(unit, ability, metadata, current_target)
+                if cast_name then
+                    return cast_name
+                end
             end
         end
+
+        ::continue_ability::
     end
 
     return nil
