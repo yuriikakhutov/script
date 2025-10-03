@@ -335,10 +335,10 @@ local ABILITY_DATA = {
         prefer_hero = true,
     },
     ogre_mauler_smash = {
-        type = "no_target",
+        type = "point",
         display = "Ogre Smash",
-        radius = 275,
-        min_enemies = 1,
+        fixed_range = 350,
+        range_buffer = 50,
     },
     forest_troll_high_priest_heal = {
         type = "ally_target",
@@ -595,14 +595,18 @@ local function IssueFollowOrders()
             local unit_pos = Entity.GetAbsOrigin(unit)
             local distance = hero_pos:Distance(unit_pos)
 
-            if current_target and Entity.IsAlive(current_target) then
-                local ability_cast = TryUseAbilities(unit, current_target)
-                if ability_cast then
-                    follower.last_action = string.format("Использую: %s", ability_cast)
-                    follower.next_action_time = current_time + ORDER_COOLDOWN
-                    goto continue
-                end
+            local ability_cast = TryUseAbilities(unit, current_target)
+            if not ability_cast and not current_target then
+                ability_cast = TryUseAbilities(unit, nil)
+            end
 
+            if ability_cast then
+                follower.last_action = string.format("Использую: %s", ability_cast)
+                follower.next_action_time = current_time + ORDER_COOLDOWN
+                goto continue
+            end
+
+            if current_target and Entity.IsAlive(current_target) then
                 Player.PrepareUnitOrders(
                     local_player,
                     Enum.UnitOrder.DOTA_UNIT_ORDER_ATTACK_TARGET,
@@ -628,13 +632,6 @@ local function IssueFollowOrders()
                 follower.last_action = "Двигаюсь к герою"
                 follower.next_action_time = current_time + ORDER_COOLDOWN
             else
-                local ability_cast = TryUseAbilities(unit, nil)
-                if ability_cast then
-                    follower.last_action = string.format("Использую: %s", ability_cast)
-                    follower.next_action_time = current_time + ORDER_COOLDOWN
-                    goto continue
-                end
-
                 follower.last_action = "В радиусе"
                 follower.next_action_time = current_time + ORDER_COOLDOWN
             end
