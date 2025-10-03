@@ -11,10 +11,10 @@ marked as _Needs verification_ before relying on it in automation logic.
 | `mud_golem_hurl_boulder` | Mud Golem | Target (Enemy) | 800 range | 125 damage, 0.6s stun. Requires line of sight. | Confirmed |
 | `ancient_rock_golem_hurl_boulder` | Ancient Rock Golem | Target (Enemy) | 950 range | 275 damage, 2s stun. Longer cast point than basic golem. | Needs verification |
 | `dark_troll_warlord_ensnare` | Dark Troll Summoner | Target (Enemy / Neutral) | 550 range | 1.75s root, works on neutrals and heroes, pierces spell immunity. | Confirmed |
-| `dark_troll_warlord_raise_dead` / `dark_troll_summoner_raise_dead` | Dark Troll Summoner | No target | 400 radius corpse search | Consumes 1-2 charges to summon skeleton warriors near the caster. Casts even without nearby enemies. | Confirmed |
+| `dark_troll_warlord_raise_dead` / `dark_troll_summoner_raise_dead` | Dark Troll Summoner | No target | 400 radius corpse search | Consumes 1-2 charges to summon skeleton warriors near the caster. Casts even without nearby enemies. 2 charges, 40s replenish. | Confirmed |
 | `dark_troll_priest_heal` | Dark Troll Priest | Ally target | 450 range | 15 HP/s heal over 15s (225 total). Prefer heroes under 85% HP. | Needs verification |
 | `forest_troll_high_priest_heal` | Forest Troll High Priest | Ally target | 450 range | 30 HP/s heal over 15s (450 total). Prioritise heroes <90% HP; avoid overheal. | Needs verification |
-| `forest_troll_berserker_envenomed_weapons` | Forest Troll Berserker | Toggle (Self) | Melee attacks apply poison | Enable before fighting; disable when idle to reduce HP drain. | Needs verification |
+| `forest_troll_berserker_envenomed_weapons` | Forest Troll Berserker | Toggle (Self) | Melee attacks apply poison | Enable before fighting; disable when idle to reduce HP drain. Costs 6 HP/s. | Needs verification |
 | `ogre_bruiser_ogre_smash` / `ogre_mauler_smash` | Ogre Bruiser / Mauler | Point leap | 350 leap range, 250 impact radius | Leap + slam that knocks up for 1s and deals 150 damage. Needs enemy within leap window. | Confirmed |
 | `ogre_magi_frost_armor` | Ogre Frostmage | Ally target | 600 range | Grants +8 armor + attack slow for 15s. Refresh when remaining duration <2s. | Needs verification |
 | `harpy_storm_chain_lightning` | Harpy Stormcrafter | Target (Enemy) | 700 range | Bounces 4 times, 140 damage first hit, 35% damage falloff. | Needs verification |
@@ -26,15 +26,19 @@ marked as _Needs verification_ before relying on it in automation logic.
 | `centaur_khan_war_stomp` | Centaur Conqueror / Khan | No target | 315 radius | 2s stun to enemies around the caster. Cast when ≥1 enemy in radius. | Confirmed |
 | `polar_furbolg_ursa_warrior_thunder_clap` | Ursa Warrior | No target | 315 radius | 150 damage + 1.5s slow. Prefer ≥1 enemy in radius. | Confirmed |
 | `hellbear_smasher_slam` | Hellbear Smasher | No target | 350 radius | 150 damage + 2s slow. | Confirmed |
-| `ancient_thunderhide_frenzy` | Ancient Thunderhide | Ally target | 700 range | +75 attack speed, +10% move speed for 12s. Use on strongest melee core. | Needs verification |
-| `ancient_thunderhide_slam` | Ancient Thunderhide | No target | 275 radius | 150 damage + 2s slow for 2s. Only cast in melee range. | Needs verification |
+| `ancient_thunderhide_frenzy` | Ancient Thunderhide | Ally target | 700 range | +75 attack speed, +15% move speed for 12s. 35s cooldown; prefer melee carries. | Needs verification |
+| `ancient_thunderhide_slam` | Ancient Thunderhide | No target | 275 radius | 150 damage + 2s slow for 2s. 8s cooldown, only cast in melee range. | Needs verification |
+| `ancient_thunderhide_roar` | Ancient Thunderhide | No target | 1200 radius | +50 attack speed +10% move speed to allies, 25s duration. Shares cooldown with Frenzy (same spell when dominated). | Needs verification |
 | `ancient_black_dragon_fireball` / `black_dragon_fireball` | Black Dragon | Point (Ground) | 750 range, 275 radius pool | Leaves burning ground for 10s, 80 DPS. Avoid overlapping pools. | Needs verification |
 | `ancient_blue_dragon_frost_breath` | Blue Dragon | Cone (Enemy) | 800 attack range cone | Applies 30% move slow for 3s. Works via auto-cast toggle. | Needs verification |
+| `ancient_blue_dragon_frost_armor` | Blue Dragon | Ally target | 600 range | Same as Ogre Frost Armor: +8 armor, attack slow for 15s. Treat like single-target buff. | Needs verification |
 | `enraged_wildkin_tornado` | Enraged Wildkin | Point (Ground) | 800 cast range | Spawns controllable tornado for 30s; sweep through enemies for 15 DPS + lift. | Needs verification |
 | `enraged_wildkin_toughness_aura` | Enraged Wildkin | Aura (Passive) | 900 radius | +3 armor aura; ensure unit stays near allies. | Reference only |
+| `enraged_wildkin_hurricane` | Enraged Wildkin | Point (Enemy) | 600 range pull | 2.4s channel that pulls enemies 200 units toward caster per second. Interruptible; use defensively. | Needs verification |
 | `alpha_wolf_howl` | Alpha Wolf | No target | 1200 radius | +30% base damage for allies for 15s. Shares cooldown with Lycan. | Needs verification |
 | `ancient_prowler_shaman_crush` | Ancient Prowler Shaman | No target | 275 radius | 200 damage + 2s root. Requires enemy in melee range. | Needs verification |
 | `ancient_prowler_shaman_fertile_ground` | Ancient Prowler Shaman | Point (Ground) | 400 range | Places trap that roots after 2s; combo with Crush. | Needs verification |
+| `ancient_prowler_shaman_overgrowth` | Ancient Prowler Shaman | No target | 600 radius | 3s root + 100 DPS over duration. Long cooldown (45s); confirm availability in neutral kit. | Needs verification |
 | `ghost_frost_attack` | Ghost | Target (Enemy) | 600 range | Auto-cast orb that slows attack and move speed by 30% for 4s. | Needs verification |
 | `troll_priest_heal` | Hill Troll Priest | Ally target | 600 range | 25 HP/s heal over 10s (250 total). Prefer lowest-health hero. | Needs verification |
 | `kobold_taskmaster_speed_aura` | Kobold Taskmaster | Aura (Passive) | 900 radius | +12% move speed to allies. Keep near melee units. | Reference only |
@@ -42,6 +46,14 @@ marked as _Needs verification_ before relying on it in automation logic.
 | `tiny_golem_rock_throw` | Shard Mud Golem | Target (Enemy) | 700 range | 100 damage, 0.3s stun. Spawns after Mud Golem death. | Needs verification |
 | `warpine_raider_seed_shot` | Warpine Raider | Point (Ground) | 600 range | 1.2s delay projectile; deals 200 damage + 40% slow for 2s. | Needs verification |
 | `neutral_spell_tombstone_zombie` | Tombstone (Neutral Event) | Point (Ground) | 600 range | Summons zombies periodically; treat as high-threat objective. | Needs verification |
+| `granite_golem_bash` | Ancient Rock Golem | Passive proc | 25% chance, 1.5s stun | Works on attacks; no action required but note for threat evaluation. | Reference only |
+| `neutral_spell_primal_beast_pulverize` | Primal Beast (Event) | Channel (Enemy) | 250 grab radius | 2.3s channel dealing 45 DPS + slam damage. Must stay in melee range. | Needs verification |
+
+### Additional Neutral Spells Requiring Data
+
+- `ancient_ice_shaman_frost_armor`: confirm whether neutral variant still casts single-target armor buff post-7.35b.
+- `neutral_fel_beast_haunt`: collect slow values and cooldown for haunt pulse.
+- `warpine_raider_root`: determine if ability still exists or replaced by Seed Shot in current patch.
 
 ## Hero Control Notes
 
@@ -52,6 +64,10 @@ These hero abilities are relevant when the player dominates or temporarily contr
 | `axe_berserkers_call` | Axe | No target | 300 radius | Taunts enemies for 2.4–3.2s, grants 30 bonus armor. Step into melee before casting. | Needs verification |
 | `axe_battle_hunger` | Axe | Target (Enemy) | 700 range | 16 DPS + slow until target kills unit or duration ends. Avoid recasting on already affected enemies. | Needs verification |
 | `axe_culling_blade` | Axe | Target (Enemy) | 150 melee range | Execute below threshold HP (275/325/375 + bonuses). Grants movement speed on kill. | Needs verification |
+| `centaur_double_edge` | Centaur Warrunner | No target | 190 radius | 300/400/500 damage, self-damage reduced by 50%. Step into melee before casting. | Needs verification |
+| `centaur_hoof_stomp` | Centaur Warrunner | No target | 315 radius | 2/2.5/3s stun with 100/150/200 damage. Requires close range. | Needs verification |
+| `legion_commander_duel` | Legion Commander | Target (Enemy) | 150 melee range | 4/4.5/5s duel; ensure allies nearby. Cast when target HP <50% ideally. | Needs verification |
+| `legion_commander_press_the_attack` | Legion Commander | Ally target | 700 range | Purges debuffs, grants 65/85/105 AS and regen for 5s. Prioritize stunned allies. | Needs verification |
 | `lich_frost_shield` | Lich | Ally target | 600 range | Reduces physical damage by 60% and damages attackers. | Needs verification |
 | `shadow_shaman_shackles` | Shadow Shaman | Target (Enemy) | 400 range | Channel 2.75s disable. Interruptible; ensure safety before casting. | Needs verification |
 
