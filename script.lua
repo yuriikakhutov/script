@@ -1,6 +1,8 @@
 local agent_script = {}
 
-local FOLLOW_DISTANCE = 300
+agent_script.ui = {}
+
+local DEFAULT_FOLLOW_DISTANCE = 300
 local ORDER_COOLDOWN = 0.3
 
 local my_hero = nil
@@ -8,7 +10,35 @@ local local_player = nil
 local local_player_id = nil
 local debug_font = nil
 
+local menu_initialized = false
+
 local followers = {}
+
+local function EnsureMenu()
+    if menu_initialized then
+        return
+    end
+
+    local scripts_tab = Menu.Create("Scripts", "Other", "Unit Followers")
+    if not scripts_tab then
+        return
+    end
+
+    scripts_tab:Icon("\u{f0c1}")
+
+    local main_group = scripts_tab:Create("Основные настройки")
+
+    agent_script.ui.enable = main_group:Switch("Включить скрипт", true, "\u{f205}")
+    agent_script.ui.enable:ToolTip("Автоматически перемещать всех контролируемых юнитов к герою.")
+
+    agent_script.ui.follow_distance = main_group:Slider("Дистанция следования", 100, 800, DEFAULT_FOLLOW_DISTANCE, "%d")
+    agent_script.ui.follow_distance:ToolTip("На каком расстоянии от героя должны находиться контролируемые юниты.")
+
+    agent_script.ui.debug = main_group:Switch("Отображать отладку", true, "\u{f05a}")
+    agent_script.ui.debug:ToolTip("Показывать текстовое состояние над юнитами.")
+
+    menu_initialized = true
+end
 
 local function ResetState()
     my_hero = nil
@@ -86,6 +116,14 @@ local function UpdateFollowers()
     followers = next_followers
 end
 
+local function GetFollowDistance()
+    if agent_script.ui.follow_distance then
+        return agent_script.ui.follow_distance:Get()
+    end
+
+    return DEFAULT_FOLLOW_DISTANCE
+end
+
 local function IssueFollowOrders()
     if not my_hero or not local_player then
         return
@@ -93,6 +131,8 @@ local function IssueFollowOrders()
 
     local hero_pos = Entity.GetAbsOrigin(my_hero)
     local current_time = GlobalVars.GetCurTime()
+
+    local follow_distance = GetFollowDistance()
 
     for handle, follower in pairs(followers) do
         local unit = follower.unit
@@ -108,7 +148,7 @@ local function IssueFollowOrders()
             local unit_pos = Entity.GetAbsOrigin(unit)
             local distance = hero_pos:Distance(unit_pos)
 
-            if distance > FOLLOW_DISTANCE then
+            if distance > follow_distance then
                 Player.PrepareUnitOrders(
                     local_player,
                     Enum.UnitOrder.DOTA_UNIT_ORDER_MOVE_TO_POSITION,
@@ -130,6 +170,12 @@ local function IssueFollowOrders()
 end
 
 function agent_script.OnUpdate()
+    EnsureMenu()
+
+    if agent_script.ui.enable and not agent_script.ui.enable:Get() then
+        return
+    end
+
     if not Engine.IsInGame() then
         ResetState()
         return
@@ -154,6 +200,10 @@ end
 
 function agent_script.OnDraw()
     if not my_hero then
+        return
+    end
+
+    if agent_script.ui.debug and not agent_script.ui.debug:Get() then
         return
     end
 
