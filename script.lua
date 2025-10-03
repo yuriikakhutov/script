@@ -820,7 +820,6 @@ local function TryCastAbilities(follower, unit, context, current_time)
                     follower.next_action_time = current_time + (metadata.post_cast_delay or ORDER_COOLDOWN)
                     return true
                 end
-                end
             end
         end
 
