@@ -76,6 +76,9 @@ local function EnsureMenu()
     if type(target_group.Switch) == "function" then
         agent_script.ui.auto_cast = target_group:Switch("Авто использование навыков", true, "\u{f0a4}")
         ApplyTooltip(agent_script.ui.auto_cast, "Автоматически применять направленные способности юнитов по их цели.")
+
+        agent_script.ui.cast_on_creeps = target_group:Switch("Использовать навыки на крипов", true, "\u{f06d}")
+        ApplyTooltip(agent_script.ui.cast_on_creeps, "Позволять применять способности по вражеским и нейтральным крипам.")
     end
 
     if type(target_group.Switch) == "function" then
@@ -188,6 +191,14 @@ end
 
 local function ShouldAutoCast()
     return agent_script.ui.auto_cast and agent_script.ui.auto_cast:Get()
+end
+
+local function ShouldCastOnCreeps()
+    if agent_script.ui.cast_on_creeps then
+        return agent_script.ui.cast_on_creeps:Get()
+    end
+
+    return true
 end
 
 local function FindAllyAnchor(unit)
@@ -495,12 +506,13 @@ end
 
 local function CountEnemiesAround(position, radius)
     if not my_hero or not position or radius <= 0 then
-        return 0, 0
+        return 0, 0, 0
     end
 
     local hero_team = Entity.GetTeamNum(my_hero)
     local total = 0
     local hero_count = 0
+    local creep_count = 0
 
     local function Accumulate(units)
         for _, enemy in ipairs(units) do
@@ -508,6 +520,8 @@ local function CountEnemiesAround(position, radius)
                 total = total + 1
                 if NPC.IsHero(enemy) then
                     hero_count = hero_count + 1
+                elseif NPC.IsCreep(enemy) then
+                    creep_count = creep_count + 1
                 end
             end
         end
@@ -516,7 +530,7 @@ local function CountEnemiesAround(position, radius)
     Accumulate(NPCs.InRadius(position, radius, hero_team, Enum.TeamType.TEAM_ENEMY) or {})
     Accumulate(NPCs.InRadius(position, radius, hero_team, Enum.TeamType.TEAM_NEUTRAL) or {})
 
-    return total, hero_count
+    return total, hero_count, creep_count
 end
 
 local function AllySatisfiesMetadata(ally, metadata)
@@ -597,6 +611,10 @@ local function EnemySatisfiesMetadata(enemy, metadata, ability)
         return false
     end
 
+    if NPC.IsCreep(enemy) and not ShouldCastOnCreeps() then
+        return false
+    end
+
     if metadata.exclude_illusions and NPC.IsIllusion(enemy) then
         return false
     end
@@ -657,7 +675,29 @@ local function TryCastAbility(unit, ability, metadata, current_target)
     end
 
     local mana = NPC.GetMana(unit)
-    if not Ability.IsReady(ability) or not Ability.IsCastable(ability, mana) then
+
+    local charges = nil
+    if metadata.requires_charges then
+        charges = GetAbilityCharges(ability)
+        if not charges or charges <= 0 then
+            return nil
+        end
+    end
+
+    local is_ready = true
+    if type(Ability.IsReady) == "function" then
+        is_ready = Ability.IsReady(ability)
+    end
+
+    if metadata.requires_charges and charges and charges > 0 then
+        is_ready = true
+    end
+
+    if not is_ready then
+        return nil
+    end
+
+    if type(Ability.IsCastable) == "function" and not Ability.IsCastable(ability, mana) then
         return nil
     end
 
@@ -761,20 +801,30 @@ local function TryCastAbility(unit, ability, metadata, current_target)
         Ability.CastPosition(ability, target_pos)
         return metadata.display or ability_name
     elseif metadata.type == "no_target" then
-        if metadata.requires_charges then
-            local charges = GetAbilityCharges(ability)
-            if not charges or charges <= 0 then
-                return nil
-            end
-        end
-
         local radius = metadata.radius or (Ability.GetCastRange and Ability.GetCastRange(ability)) or 0
         if radius <= 0 then
             radius = 250
         end
 
-        local total, hero_count = CountEnemiesAround(unit_pos, radius)
-        local relevant_count = metadata.only_heroes and hero_count or total
+        local total, hero_count, creep_count = CountEnemiesAround(unit_pos, radius)
+        local include_creeps = ShouldCastOnCreeps()
+        local relevant_count
+        if metadata.only_heroes then
+            relevant_count = hero_count
+        elseif include_creeps then
+            relevant_count = total
+        else
+            relevant_count = hero_count
+        end
+
+        if metadata.only_creeps then
+            if include_creeps then
+                relevant_count = creep_count
+            else
+                relevant_count = 0
+            end
+        end
+
         if relevant_count < (metadata.min_enemies or 1) then
             return nil
         end
@@ -814,7 +864,21 @@ local function TryUseAbilities(unit, current_target)
             local metadata = GetAbilityMetadata(ability_name)
 
             if metadata and (auto_cast_enabled or metadata.always_cast) then
-                if type(Ability.IsReady) == "function" and not Ability.IsReady(ability) then
+                local ready = true
+                if type(Ability.IsReady) == "function" then
+                    ready = Ability.IsReady(ability)
+                end
+
+                if metadata.requires_charges then
+                    local charges = GetAbilityCharges(ability)
+                    if not charges or charges <= 0 then
+                        ready = false
+                    else
+                        ready = true
+                    end
+                end
+
+                if not ready then
                     goto continue_ability
                 end
 
