@@ -346,12 +346,22 @@ local function GetAbilityCharges(ability)
         return nil
     end
 
-    if type(Ability.GetCurrentCharges) == "function" then
-        return Ability.GetCurrentCharges(ability)
-    end
+    local charge_readers = {
+        "GetCurrentCharges",
+        "GetCurrentAbilityCharges",
+        "GetRemainingCharges",
+        "GetSecondaryCharges",
+        "GetCharges",
+    }
 
-    if type(Ability.GetCurrentAbilityCharges) == "function" then
-        return Ability.GetCurrentAbilityCharges(ability)
+    for _, reader in ipairs(charge_readers) do
+        local getter = Ability[reader]
+        if type(getter) == "function" then
+            local ok, value = pcall(getter, ability)
+            if ok and type(value) == "number" then
+                return value
+            end
+        end
     end
 
     return nil
@@ -362,6 +372,14 @@ local OGRE_SMASH_METADATA = {
     display = "Ogre Smash",
     fixed_range = 350,
     range_buffer = 50,
+}
+
+local DARK_TROLL_RAISE_DEAD_METADATA = {
+    type = "no_target",
+    display = "Raise Dead",
+    requires_charges = true,
+    min_enemies = 0,
+    always_cast = true,
 }
 
 local ABILITY_DATA = {
@@ -448,13 +466,8 @@ local ABILITY_DATA = {
         only_heroes = true,
         max_ally_health_pct = 99.5,
     },
-    dark_troll_warlord_raise_dead = {
-        type = "no_target",
-        display = "Raise Dead",
-        requires_charges = true,
-        min_enemies = 0,
-        always_cast = true,
-    },
+    dark_troll_warlord_raise_dead = DARK_TROLL_RAISE_DEAD_METADATA,
+    dark_troll_warlord_raise_dead_datadriven = DARK_TROLL_RAISE_DEAD_METADATA,
     axe_berserkers_call = {
         type = "no_target",
         display = "Berserker's Call",
