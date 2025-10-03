@@ -31,25 +31,28 @@ local function EnsureMenu()
         return
     end
 
-    if main_group.Switch then
-        agent_script.ui.enable = main_group:Switch("Включить скрипт", true, "\u{f205}")
-        if agent_script.ui.enable and agent_script.ui.enable.ToolTip then
-            agent_script.ui.enable:ToolTip("Автоматически перемещать всех контролируемых юнитов к герою.")
+    local switch_fn = type(main_group.Switch) == "function" and main_group.Switch or nil
+    local slider_fn = type(main_group.Slider) == "function" and main_group.Slider or nil
+
+    local function ApplyTooltip(control, text)
+        if control and type(control.ToolTip) == "function" then
+            control:ToolTip(text)
         end
     end
 
-    if main_group.Slider then
-        agent_script.ui.follow_distance = main_group:Slider("Дистанция следования", 100, 800, DEFAULT_FOLLOW_DISTANCE, "%d")
-        if agent_script.ui.follow_distance and agent_script.ui.follow_distance.ToolTip then
-            agent_script.ui.follow_distance:ToolTip("На каком расстоянии от героя должны находиться контролируемые юниты.")
-        end
+    if switch_fn then
+        agent_script.ui.enable = switch_fn(main_group, "Включить скрипт", true, "\u{f205}")
+        ApplyTooltip(agent_script.ui.enable, "Автоматически перемещать всех контролируемых юнитов к герою.")
     end
 
-    if main_group.Switch then
-        agent_script.ui.debug = main_group:Switch("Отображать отладку", true, "\u{f05a}")
-        if agent_script.ui.debug and agent_script.ui.debug.ToolTip then
-            agent_script.ui.debug:ToolTip("Показывать текстовое состояние над юнитами.")
-        end
+    if slider_fn then
+        agent_script.ui.follow_distance = slider_fn(main_group, "Дистанция следования", 100, 800, DEFAULT_FOLLOW_DISTANCE, "%d")
+        ApplyTooltip(agent_script.ui.follow_distance, "На каком расстоянии от героя должны находиться контролируемые юниты.")
+    end
+
+    if switch_fn then
+        agent_script.ui.debug = switch_fn(main_group, "Отображать отладку", true, "\u{f05a}")
+        ApplyTooltip(agent_script.ui.debug, "Показывать текстовое состояние над юнитами.")
     end
 
     menu_initialized = true
