@@ -228,6 +228,37 @@ local function AcquireAttackTarget(hero_pos)
     return best_target
 end
 
+local function GetUnitHealthPercent(unit)
+    if not unit or not Entity.IsAlive(unit) then
+        return 0
+    end
+
+    local health = Entity.GetHealth(unit) or 0
+    local max_health = Entity.GetMaxHealth(unit) or 0
+
+    if max_health <= 0 then
+        return 0
+    end
+
+    return (health / max_health) * 100
+end
+
+local function GetAbilityCharges(ability)
+    if not ability then
+        return nil
+    end
+
+    if type(Ability.GetCurrentCharges) == "function" then
+        return Ability.GetCurrentCharges(ability)
+    end
+
+    if type(Ability.GetCurrentAbilityCharges) == "function" then
+        return Ability.GetCurrentAbilityCharges(ability)
+    end
+
+    return nil
+end
+
 local ABILITY_DATA = {
     mud_golem_hurl_boulder = {
         type = "target",
@@ -303,6 +334,25 @@ local ABILITY_DATA = {
         buff_modifier = "modifier_ogre_magi_frost_armor",
         prefer_hero = true,
     },
+    ogre_mauler_smash = {
+        type = "no_target",
+        display = "Ogre Smash",
+        radius = 275,
+        min_enemies = 1,
+    },
+    forest_troll_high_priest_heal = {
+        type = "ally_target",
+        display = "Heal",
+        prefer_hero = true,
+        only_heroes = true,
+        max_ally_health_pct = 99.5,
+    },
+    dark_troll_warlord_raise_dead = {
+        type = "no_target",
+        display = "Raise Dead",
+        requires_charges = true,
+        min_enemies = 0,
+    },
 }
 
 local function GetAbilityMetadata(name)
@@ -351,12 +401,46 @@ local function CountEnemiesAround(position, radius)
     return total, hero_count
 end
 
+local function AllySatisfiesMetadata(ally, metadata)
+    if not ally or not metadata then
+        return false
+    end
+
+    if metadata.only_heroes and not NPC.IsHero(ally) then
+        return false
+    end
+
+    if metadata.only_creeps and not NPC.IsCreep(ally) then
+        return false
+    end
+
+    if metadata.max_ally_health_pct then
+        local health_pct = GetUnitHealthPercent(ally)
+        if health_pct >= metadata.max_ally_health_pct then
+            return false
+        end
+    end
+
+    if metadata.min_ally_health_pct then
+        local health_pct = GetUnitHealthPercent(ally)
+        if health_pct <= metadata.min_ally_health_pct then
+            return false
+        end
+    end
+
+    if metadata.buff_modifier and NPC.HasModifier(ally, metadata.buff_modifier) then
+        return false
+    end
+
+    return true
+end
+
 local function ChooseAllyTarget(unit, metadata)
     if not metadata then
         return nil
     end
 
-    if metadata.prefer_hero and my_hero and Entity.IsAlive(my_hero) then
+    if metadata.prefer_hero and my_hero and Entity.IsAlive(my_hero) and AllySatisfiesMetadata(my_hero, metadata) then
         return my_hero
     end
 
@@ -369,7 +453,7 @@ local function ChooseAllyTarget(unit, metadata)
     local allies = NPCs.InRadius(unit_pos, 900, hero_team, Enum.TeamType.TEAM_FRIEND)
     if allies then
         for _, ally in ipairs(allies) do
-            if Entity.IsAlive(ally) and not NPC.IsCourier(ally) and ally ~= unit then
+            if Entity.IsAlive(ally) and ally ~= unit and not NPC.IsCourier(ally) and AllySatisfiesMetadata(ally, metadata) then
                 return ally
             end
         end
@@ -430,6 +514,13 @@ local function TryCastAbility(unit, ability, metadata, current_target)
         Ability.CastPosition(ability, target_pos)
         return metadata.display or ability_name
     elseif metadata.type == "no_target" then
+        if metadata.requires_charges then
+            local charges = GetAbilityCharges(ability)
+            if not charges or charges <= 0 then
+                return nil
+            end
+        end
+
         local radius = metadata.radius or (Ability.GetCastRange and Ability.GetCastRange(ability)) or 0
         if radius <= 0 then
             radius = 250
@@ -446,10 +537,6 @@ local function TryCastAbility(unit, ability, metadata, current_target)
     elseif metadata.type == "ally_target" then
         local ally = ChooseAllyTarget(unit, metadata)
         if not ally or not Entity.IsAlive(ally) then
-            return nil
-        end
-
-        if metadata.buff_modifier and NPC.HasModifier(ally, metadata.buff_modifier) then
             return nil
         end
 
