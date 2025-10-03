@@ -190,14 +190,14 @@ local function ShouldAutoCast()
     return agent_script.ui.auto_cast and agent_script.ui.auto_cast:Get()
 end
 
-local function AcquireAttackTarget(hero_pos)
-    if not my_hero then
+local function AcquireAttackTarget(center_pos, radius_override)
+    if not my_hero or not center_pos then
         return nil
     end
 
     local hero_team = Entity.GetTeamNum(my_hero)
-    local search_radius = GetAttackRadius()
-    local enemies = NPCs.InRadius(hero_pos, search_radius, hero_team, Enum.TeamType.TEAM_ENEMY) or {}
+    local search_radius = radius_override or GetAttackRadius()
+    local enemies = NPCs.InRadius(center_pos, search_radius, hero_team, Enum.TeamType.TEAM_ENEMY) or {}
 
     local best_target = nil
     local best_score = -math.huge
@@ -205,7 +205,7 @@ local function AcquireAttackTarget(hero_pos)
     for _, enemy in ipairs(enemies) do
         if Entity.IsAlive(enemy) and not NPC.IsCourier(enemy) then
             local enemy_pos = Entity.GetAbsOrigin(enemy)
-            local distance = hero_pos:Distance(enemy_pos)
+            local distance = center_pos:Distance(enemy_pos)
             local score = -distance
 
             if NPC.IsHero(enemy) then
@@ -729,7 +729,14 @@ local function TryUseAbilities(unit, current_target)
         return nil
     end
 
-    for slot = 0, 5 do
+    local ability_count = (NPC.GetAbilityCount and NPC.GetAbilityCount(unit)) or 0
+    if ability_count <= 0 then
+        ability_count = 6
+    end
+
+    local max_slots = math.min(ability_count, 24)
+
+    for slot = 0, max_slots - 1 do
         local ability = NPC.GetAbilityByIndex(unit, slot)
         if ability and Ability.GetLevel(ability) > 0 then
             local metadata = GetAbilityMetadata(Ability.GetName(ability))
@@ -752,12 +759,6 @@ local function IssueFollowOrders()
     local current_time = GlobalVars.GetCurTime()
 
     local follow_distance = GetFollowDistance()
-    local current_target = nil
-
-    if ShouldAutoAttack() then
-        current_target = AcquireAttackTarget(hero_pos)
-    end
-
     for handle, follower in pairs(followers) do
         local unit = follower.unit
         if unit and Entity.IsAlive(unit) then
@@ -771,6 +772,14 @@ local function IssueFollowOrders()
 
             local unit_pos = Entity.GetAbsOrigin(unit)
             local distance = hero_pos:Distance(unit_pos)
+
+            local current_target = nil
+            if ShouldAutoAttack() then
+                current_target = AcquireAttackTarget(unit_pos)
+                if not current_target then
+                    current_target = AcquireAttackTarget(hero_pos)
+                end
+            end
 
             local ability_cast = TryUseAbilities(unit, current_target)
             if not ability_cast and not current_target then
