@@ -13,15 +13,15 @@ marked as _Needs verification_ before relying on it in automation logic.
 | `dark_troll_warlord_ensnare` | Dark Troll Summoner | Target (Enemy / Neutral) | 550 range | 1.75s root, works on neutrals and heroes, pierces spell immunity. | Confirmed |
 | `dark_troll_warlord_raise_dead` / `dark_troll_summoner_raise_dead` | Dark Troll Summoner | No target | 400 radius corpse search | Consumes 1-2 charges to summon skeleton warriors near the caster. Casts even without nearby enemies. 2 charges, 40s replenish. | Confirmed |
 | `dark_troll_priest_heal` | Dark Troll Priest | Ally target | 450 range | 15 HP/s heal over 15s (225 total). Prefer heroes under 85% HP. | Needs verification |
-| `forest_troll_high_priest_heal` | Forest Troll High Priest | Ally target | 450 range | 30 HP/s heal over 15s (450 total). Prioritise heroes <90% HP; avoid overheal. | Needs verification |
+| `forest_troll_high_priest_heal` | Forest Troll High Priest | Ally target | 350–450 range | Instant 100 HP heal, 10/9/8/6 s CD. Keep autocast on; prioritise <90% HP heroes. | Confirmed |
 | `forest_troll_berserker_envenomed_weapons` | Forest Troll Berserker | Toggle (Self) | Melee attacks apply poison | Enable before fighting; disable when idle to reduce HP drain. Costs 6 HP/s. | Needs verification |
 | `ogre_bruiser_ogre_smash` / `ogre_mauler_smash` | Ogre Bruiser / Mauler | Point leap | 350 leap range, 250 impact radius | Leap + slam that knocks up for 1s and deals 150 damage. Needs enemy within leap window. | Confirmed |
 | `ogre_magi_frost_armor` | Ogre Frostmage | Ally target | 600 range | Grants +8 armor + attack slow for 15s. Refresh when remaining duration <2s. | Needs verification |
-| `harpy_storm_chain_lightning` | Harpy Stormcrafter | Target (Enemy) | 700 range | Bounces 4 times, 140 damage first hit, 35% damage falloff. | Needs verification |
+| `harpy_storm_chain_lightning` | Harpy Stormcrafter | Target (Enemy) | 900 range | 140 base damage, 4 bounces within 500 range, 25% damage loss per bounce, 4 s CD. | Confirmed |
 | `harpy_scout_chain_lightning` | Harpy Scout | Target (Enemy) | 600 range | Weaker chain lightning (90 base damage, 4 bounces). | Needs verification |
 | `satyr_mindstealer_mana_burn` | Satyr Mindstealer | Target (Enemy Hero) | 600 range | Burns 120 mana, deals equal damage. Skip if target <75 mana. | Needs verification |
 | `satyr_soulstealer_mana_burn` | Satyr Soulstealer | Target (Enemy Hero) | 600 range | Burns 150 mana, deals equal damage. Same restrictions as Mindstealer. | Needs verification |
-| `satyr_hellcaller_shockwave` | Satyr Tormenter | Point (Enemy) | 800 travel distance, 150 width | 160 damage line nuke; aim when ≥1 enemy in path. | Needs verification |
+| `satyr_hellcaller_shockwave` | Satyr Tormenter | Point (Enemy) | 800 travel distance, 150 width | 160 damage line nuke; aim when ≥1 enemy in path. 8 s CD. | Needs verification |
 | `satyr_trickster_purge` | Satyr Banisher | Target (Enemy / Ally) | 600 range | Dispel + 5s 100%→0% slow. Removes buffs from enemies or debuffs from allies. | Needs verification |
 | `centaur_khan_war_stomp` | Centaur Conqueror / Khan | No target | 315 radius | 2s stun to enemies around the caster. Cast when ≥1 enemy in radius. | Confirmed |
 | `polar_furbolg_ursa_warrior_thunder_clap` | Ursa Warrior | No target | 315 radius | 150 damage + 1.5s slow. Prefer ≥1 enemy in radius. | Confirmed |
@@ -36,15 +36,18 @@ marked as _Needs verification_ before relying on it in automation logic.
 | `enraged_wildkin_toughness_aura` | Enraged Wildkin | Aura (Passive) | 900 radius | +3 armor aura; ensure unit stays near allies. | Reference only |
 | `enraged_wildkin_hurricane` | Enraged Wildkin | Point (Enemy) | 600 range pull | 2.4s channel that pulls enemies 200 units toward caster per second. Interruptible; use defensively. | Needs verification |
 | `alpha_wolf_howl` | Alpha Wolf | No target | 1200 radius | +30% base damage for allies for 15s. Shares cooldown with Lycan. | Needs verification |
+| `giant_wolf_intimidate` | Alpha Wolf / Giant Wolf | No target | 300–500 radius | 60% enemy damage reduction for 4 s, 16 s CD, 50 mana. Use as defensive peel. | Confirmed |
 | `ancient_prowler_shaman_crush` | Ancient Prowler Shaman | No target | 275 radius | 200 damage + 2s root. Requires enemy in melee range. | Needs verification |
 | `ancient_prowler_shaman_fertile_ground` | Ancient Prowler Shaman | Point (Ground) | 400 range | Places trap that roots after 2s; combo with Crush. | Needs verification |
 | `ancient_prowler_shaman_overgrowth` | Ancient Prowler Shaman | No target | 600 radius | 3s root + 100 DPS over duration. Long cooldown (45s); confirm availability in neutral kit. | Needs verification |
+| `fel_beast_haunt` | Fel Beast | Target (Enemy) | 600 range | 3 s haunt slow, projectile 500 speed; CD 15/13/11/7 s, 75 mana. Stack on kiting targets. | Confirmed |
+| `ice_shaman_incendiary_bomb` | Ancient Ice Shaman | Target (Enemy / Building) | 700–800 range | 50 DPS burn for 8 s, affects buildings for 25% damage. 30 s CD, 80–100 mana. | Confirmed |
 | `ghost_frost_attack` | Ghost | Target (Enemy) | 600 range | Auto-cast orb that slows attack and move speed by 30% for 4s. | Needs verification |
 | `troll_priest_heal` | Hill Troll Priest | Ally target | 600 range | 25 HP/s heal over 10s (250 total). Prefer lowest-health hero. | Needs verification |
 | `kobold_taskmaster_speed_aura` | Kobold Taskmaster | Aura (Passive) | 900 radius | +12% move speed to allies. Keep near melee units. | Reference only |
 | `granite_golem_hp_aura` | Ancient Rock Golem | Aura (Passive) | 1200 radius | +15% max HP aura for allies. Maintain proximity to team. | Reference only |
 | `tiny_golem_rock_throw` | Shard Mud Golem | Target (Enemy) | 700 range | 100 damage, 0.3s stun. Spawns after Mud Golem death. | Needs verification |
-| `warpine_raider_seed_shot` | Warpine Raider | Point (Ground) | 600 range | 1.2s delay projectile; deals 200 damage + 40% slow for 2s. | Needs verification |
+| `warpine_raider_seed_shot` | Warpine Raider | Target (Enemy) | 575 range | 100 damage seed that bounces 4–12 times within 500 range, 100% slow for 1 s on each hit. 15 s CD, 100 mana. | Confirmed |
 | `neutral_spell_tombstone_zombie` | Tombstone (Neutral Event) | Point (Ground) | 600 range | Summons zombies periodically; treat as high-threat objective. | Needs verification |
 | `granite_golem_bash` | Ancient Rock Golem | Passive proc | 25% chance, 1.5s stun | Works on attacks; no action required but note for threat evaluation. | Reference only |
 | `neutral_spell_primal_beast_pulverize` | Primal Beast (Event) | Channel (Enemy) | 250 grab radius | 2.3s channel dealing 45 DPS + slam damage. Must stay in melee range. | Needs verification |
@@ -52,8 +55,8 @@ marked as _Needs verification_ before relying on it in automation logic.
 ### Additional Neutral Spells Requiring Data
 
 - `ancient_ice_shaman_frost_armor`: confirm whether neutral variant still casts single-target armor buff post-7.35b.
-- `neutral_fel_beast_haunt`: collect slow values and cooldown for haunt pulse.
 - `warpine_raider_root`: determine if ability still exists or replaced by Seed Shot in current patch.
+- `neutral_centaur_enrage`: check if Centaur camp retains damage buff active for automation hooks.
 
 ## Hero Control Notes
 
