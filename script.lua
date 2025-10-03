@@ -8,8 +8,10 @@ local ORDER_COOLDOWN = 0.3
 
 local bit_lib = bit32 or bit
 local ABILITY_BEHAVIOR_UNIT_TARGET = (Enum.AbilityBehavior and Enum.AbilityBehavior.DOTA_ABILITY_BEHAVIOR_UNIT_TARGET) or 0
+local ABILITY_BEHAVIOR_NO_TARGET = (Enum.AbilityBehavior and Enum.AbilityBehavior.DOTA_ABILITY_BEHAVIOR_NO_TARGET) or 0
 local TARGET_TEAM_ENEMY = Enum.TargetTeam and Enum.TargetTeam.TEAM_ENEMY
 local TARGET_TEAM_BOTH = Enum.TargetTeam and Enum.TargetTeam.TEAM_BOTH
+local TARGET_TEAM_FRIENDLY = Enum.TargetTeam and Enum.TargetTeam.TEAM_FRIENDLY
 
 local my_hero = nil
 local local_player = nil
@@ -233,6 +235,62 @@ local function AcquireAttackTarget(hero_pos)
     return best_target
 end
 
+local function AbilityTargetsEnemies(ability)
+    if not ability then
+        return false
+    end
+
+    local target_team = Ability.GetTargetTeam and Ability.GetTargetTeam(ability)
+    if target_team == TARGET_TEAM_ENEMY or target_team == TARGET_TEAM_BOTH then
+        return true
+    end
+
+    if target_team ~= nil then
+        if TARGET_TEAM_ENEMY == nil and TARGET_TEAM_BOTH == nil then
+            if TARGET_TEAM_FRIENDLY and target_team == TARGET_TEAM_FRIENDLY then
+                return false
+            end
+            return true
+        end
+    end
+
+    local behavior = Ability.GetBehavior and Ability.GetBehavior(ability)
+    if behavior and bit_lib and ABILITY_BEHAVIOR_UNIT_TARGET ~= 0 then
+        if bit_lib.band(behavior, ABILITY_BEHAVIOR_UNIT_TARGET) ~= 0 then
+            if target_team == nil then
+                return true
+            end
+        end
+    end
+
+    return false
+end
+
+local function IsInCastRange(unit, target, ability)
+    if not ability or not unit or not target then
+        return false
+    end
+
+    local cast_range = Ability.GetCastRange and Ability.GetCastRange(ability)
+    if not cast_range or cast_range <= 0 then
+        local behavior = Ability.GetBehavior and Ability.GetBehavior(ability)
+        if behavior and bit_lib and ABILITY_BEHAVIOR_NO_TARGET ~= 0 then
+            if bit_lib.band(behavior, ABILITY_BEHAVIOR_NO_TARGET) ~= 0 then
+                return false
+            end
+        end
+        return true
+    end
+
+    local unit_pos = Entity.GetAbsOrigin(unit)
+    local target_pos = Entity.GetAbsOrigin(target)
+    if not unit_pos or not target_pos then
+        return false
+    end
+
+    return unit_pos:Distance(target_pos) <= (cast_range + 50)
+end
+
 local function CastTargetedAbilities(unit, target)
     if not ShouldAutoCast() or not unit or not target then
         return nil
@@ -248,24 +306,9 @@ local function CastTargetedAbilities(unit, target)
         local ability = NPC.GetAbilityByIndex(unit, slot)
         if ability and Ability.GetLevel(ability) > 0 then
             if Ability.IsReady(ability) and Ability.IsCastable(ability, mana) then
-                local behavior = bit_lib and Ability.GetBehavior and Ability.GetBehavior(ability)
-                local is_targeted = false
-
-                if behavior and bit_lib and ABILITY_BEHAVIOR_UNIT_TARGET ~= 0 then
-                    if bit_lib.band(behavior, ABILITY_BEHAVIOR_UNIT_TARGET) ~= 0 then
-                        is_targeted = true
-                    end
-                end
-
-                if is_targeted then
-                    local target_team = Ability.GetTargetTeam and Ability.GetTargetTeam(ability)
-                    if target_team == nil
-                        or (TARGET_TEAM_ENEMY and target_team == TARGET_TEAM_ENEMY)
-                        or (TARGET_TEAM_BOTH and target_team == TARGET_TEAM_BOTH)
-                    then
-                        Ability.CastTarget(ability, target)
-                        return Ability.GetName(ability) or "ability"
-                    end
+                if AbilityTargetsEnemies(ability) and IsInCastRange(unit, target, ability) then
+                    Ability.CastTarget(ability, target)
+                    return Ability.GetName(ability) or "ability"
                 end
             end
         end
