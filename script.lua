@@ -375,11 +375,12 @@ local OGRE_SMASH_METADATA = {
 }
 
 local DARK_TROLL_RAISE_DEAD_METADATA = {
-    type = "no_target",
+    type = "point",
     display = "Raise Dead",
     requires_charges = true,
-    min_enemies = 0,
     always_cast = true,
+    cast_self = true,
+    fixed_range = 800,
 }
 
 local ABILITY_DATA = {
@@ -770,47 +771,56 @@ local function TryCastAbility(unit, ability, metadata, current_target)
         return metadata.display or ability_name
     elseif metadata.type == "point" then
         local target = current_target
-
-        if target and not EnemySatisfiesMetadata(target, metadata, ability) then
-            target = nil
-        end
+        local target_pos = nil
 
         if target then
-            local target_pos = Entity.GetAbsOrigin(target)
-            if not IsInExtendedRange(unit_pos, target_pos, ability, metadata) then
+            if not EnemySatisfiesMetadata(target, metadata, ability) then
                 target = nil
+            else
+                local candidate_pos = Entity.GetAbsOrigin(target)
+                if candidate_pos and IsInExtendedRange(unit_pos, candidate_pos, ability, metadata) then
+                    target_pos = candidate_pos
+                else
+                    target = nil
+                end
             end
         end
 
-        if not target then
+        if not target_pos then
             local hero_team = my_hero and Entity.GetTeamNum(my_hero)
             local search_radius = (metadata.fixed_range or (Ability.GetCastRange and Ability.GetCastRange(ability)) or 600)
             search_radius = search_radius + (metadata.range_buffer or 0) + (metadata.search_radius_bonus or 0)
             local enemies = (hero_team and NPCs.InRadius(unit_pos, search_radius, hero_team, Enum.TeamType.TEAM_ENEMY)) or {}
             local best_target = nil
             local best_distance = math.huge
+            local best_position = nil
 
             for _, enemy in ipairs(enemies) do
                 if EnemySatisfiesMetadata(enemy, metadata, ability) then
                     local enemy_pos = Entity.GetAbsOrigin(enemy)
-                    if IsInExtendedRange(unit_pos, enemy_pos, ability, metadata) then
+                    if enemy_pos and IsInExtendedRange(unit_pos, enemy_pos, ability, metadata) then
                         local distance = unit_pos:Distance(enemy_pos)
                         if distance < best_distance then
                             best_distance = distance
                             best_target = enemy
+                            best_position = enemy_pos
                         end
                     end
                 end
             end
 
             target = best_target
+            target_pos = best_position
         end
 
-        if not target then
+        if not target_pos and metadata.cast_self then
+            target_pos = unit_pos
+        end
+
+        if not target_pos then
             return nil
         end
 
-        local target_pos = Entity.GetAbsOrigin(target)
         Ability.CastPosition(ability, target_pos)
         return metadata.display or ability_name
     elseif metadata.type == "no_target" then
