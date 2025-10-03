@@ -53,12 +53,22 @@ local function IsDominatedCreep(unit)
     if NPC.IsHero(unit) or NPC.IsIllusion(unit) or NPC.IsCourier(unit) then
         return false
     end
-    if Entity.GetTeamNum(unit) ~= Entity.GetTeamNum(my_hero) then
+
+    if not my_hero then
         return false
     end
+
     if local_player and not NPC.IsControllableByPlayer(unit, local_player) then
         return false
     end
+
+    local unit_team = Entity.GetTeamNum(unit)
+    local hero_team = Entity.GetTeamNum(my_hero)
+
+    if unit_team ~= hero_team and unit_team ~= Enum.TeamNum.TEAM_NEUTRAL then
+        return false
+    end
+
     local unit_name = NPC.GetUnitName(unit)
     return unit_name and agent_script.creep_data[unit_name] ~= nil
 end
@@ -106,7 +116,7 @@ function Agent.new(unit, creep_data)
         state = STATES.FOLLOWING,
         next_action_time = 0,
         manual_override_until = 0,
-        thought = "",
+        thought = "Инициализация",
         target = nil,
     }, Agent)
 end
@@ -261,6 +271,10 @@ local function CleanupAgents()
     for handle, agent in pairs(agent_manager) do
         if not agent.unit or not Entity.IsAlive(agent.unit) then
             agent_manager[handle] = nil
+        elseif not NPC.IsControllableByPlayer(agent.unit, local_player or Players.GetLocal()) then
+            agent_manager[handle] = nil
+        elseif not agent_script.creep_data[NPC.GetUnitName(agent.unit) or ""] then
+            agent_manager[handle] = nil
         end
     end
 end
@@ -269,16 +283,17 @@ local function RefreshAgents()
     CleanupAgents()
 
     local hero_origin = Entity.GetAbsOrigin(my_hero)
-    local allies = NPCs.InRadius(hero_origin, 3000, Entity.GetTeamNum(my_hero), Enum.TeamType.TEAM_FRIEND)
 
-    for _, unit in ipairs(allies) do
-        if IsDominatedCreep(unit) then
-            local handle = Entity.GetIndex(unit)
-            if not agent_manager[handle] then
+    for _, unit in ipairs(NPCs.GetAll()) do
+        if Entity.IsAlive(unit) and Distance(hero_origin, Entity.GetAbsOrigin(unit)) <= 3500 then
+            if IsDominatedCreep(unit) then
+                local handle = Entity.GetIndex(unit)
                 local unit_name = NPC.GetUnitName(unit)
-                agent_manager[handle] = Agent.new(unit, agent_script.creep_data[unit_name])
-            else
-                agent_manager[handle].creep_data = agent_script.creep_data[NPC.GetUnitName(unit)]
+                if not agent_manager[handle] then
+                    agent_manager[handle] = Agent.new(unit, agent_script.creep_data[unit_name])
+                else
+                    agent_manager[handle].creep_data = agent_script.creep_data[unit_name]
+                end
             end
         end
     end
