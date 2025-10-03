@@ -31,19 +31,25 @@ local function EnsureMenu()
         return
     end
 
-    agent_script.ui.enable = main_group:Switch("Включить скрипт", true, "\u{f205}")
-    if agent_script.ui.enable then
-        agent_script.ui.enable:ToolTip("Автоматически перемещать всех контролируемых юнитов к герою.")
+    if main_group.Switch then
+        agent_script.ui.enable = main_group:Switch("Включить скрипт", true, "\u{f205}")
+        if agent_script.ui.enable and agent_script.ui.enable.ToolTip then
+            agent_script.ui.enable:ToolTip("Автоматически перемещать всех контролируемых юнитов к герою.")
+        end
     end
 
-    agent_script.ui.follow_distance = main_group:Slider("Дистанция следования", 100, 800, DEFAULT_FOLLOW_DISTANCE, "%d")
-    if agent_script.ui.follow_distance then
-        agent_script.ui.follow_distance:ToolTip("На каком расстоянии от героя должны находиться контролируемые юниты.")
+    if main_group.Slider then
+        agent_script.ui.follow_distance = main_group:Slider("Дистанция следования", 100, 800, DEFAULT_FOLLOW_DISTANCE, "%d")
+        if agent_script.ui.follow_distance and agent_script.ui.follow_distance.ToolTip then
+            agent_script.ui.follow_distance:ToolTip("На каком расстоянии от героя должны находиться контролируемые юниты.")
+        end
     end
 
-    agent_script.ui.debug = main_group:Switch("Отображать отладку", true, "\u{f05a}")
-    if agent_script.ui.debug then
-        agent_script.ui.debug:ToolTip("Показывать текстовое состояние над юнитами.")
+    if main_group.Switch then
+        agent_script.ui.debug = main_group:Switch("Отображать отладку", true, "\u{f05a}")
+        if agent_script.ui.debug and agent_script.ui.debug.ToolTip then
+            agent_script.ui.debug:ToolTip("Показывать текстовое состояние над юнитами.")
+        end
     end
 
     menu_initialized = true
