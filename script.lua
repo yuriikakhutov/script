@@ -27,15 +27,24 @@ local function EnsureMenu()
     scripts_tab:Icon("\u{f0c1}")
 
     local main_group = scripts_tab:Create("Основные настройки")
+    if not main_group then
+        return
+    end
 
     agent_script.ui.enable = main_group:Switch("Включить скрипт", true, "\u{f205}")
-    agent_script.ui.enable:ToolTip("Автоматически перемещать всех контролируемых юнитов к герою.")
+    if agent_script.ui.enable then
+        agent_script.ui.enable:ToolTip("Автоматически перемещать всех контролируемых юнитов к герою.")
+    end
 
     agent_script.ui.follow_distance = main_group:Slider("Дистанция следования", 100, 800, DEFAULT_FOLLOW_DISTANCE, "%d")
-    agent_script.ui.follow_distance:ToolTip("На каком расстоянии от героя должны находиться контролируемые юниты.")
+    if agent_script.ui.follow_distance then
+        agent_script.ui.follow_distance:ToolTip("На каком расстоянии от героя должны находиться контролируемые юниты.")
+    end
 
     agent_script.ui.debug = main_group:Switch("Отображать отладку", true, "\u{f05a}")
-    agent_script.ui.debug:ToolTip("Показывать текстовое состояние над юнитами.")
+    if agent_script.ui.debug then
+        agent_script.ui.debug:ToolTip("Показывать текстовое состояние над юнитами.")
+    end
 
     menu_initialized = true
 end
