@@ -11,6 +11,9 @@ local STATES = {
 local my_hero, local_player = nil, nil
 local font = nil
 local agent_manager = {}
+local shared_attack_target = nil
+local shared_attack_position = nil
+local shared_command_expire_time = 0
 
 local function clamp(value, min_value, max_value)
     if value < min_value then
@@ -31,6 +34,32 @@ local function EnsureFont()
         font = Render.LoadFont("Arial", 12, Enum.FontCreate.FONTFLAG_OUTLINE)
     end
     return font
+end
+
+local function ClearSharedCommand()
+    shared_attack_target = nil
+    shared_attack_position = nil
+    shared_command_expire_time = 0
+end
+
+local function SetSharedAttackTarget(target)
+    if target and Entity.IsAlive(target) and my_hero and not Entity.IsSameTeam(target, my_hero) then
+        shared_attack_target = target
+        shared_attack_position = nil
+        shared_command_expire_time = GlobalVars.GetCurTime() + 3.0
+    else
+        ClearSharedCommand()
+    end
+end
+
+local function SetSharedAttackPosition(position)
+    if position then
+        shared_attack_position = position
+        shared_attack_target = nil
+        shared_command_expire_time = GlobalVars.GetCurTime() + 3.0
+    else
+        ClearSharedCommand()
+    end
 end
 
 local function GetHeroFollowDistance(creep_data)
@@ -82,8 +111,12 @@ local function BuildContext(agent)
         unit_origin = unit_origin,
         allies = {},
         enemies = {},
-        closest_enemy = nil,
-        closest_enemy_distance = math.huge,
+        closest_enemy_hero = nil,
+        closest_enemy_hero_distance = math.huge,
+        closest_enemy_unit = nil,
+        closest_enemy_unit_distance = math.huge,
+        primary_target = nil,
+        primary_target_distance = math.huge,
     }
 
     for handle, other_agent in pairs(agent_manager) do
@@ -95,12 +128,34 @@ local function BuildContext(agent)
     for _, enemy in pairs(Heroes.GetAll()) do
         if not Entity.IsSameTeam(enemy, my_hero) and Entity.IsAlive(enemy) and NPC.IsVisible(enemy) and not NPC.IsIllusion(enemy) then
             local distance = Distance(unit_origin, Entity.GetAbsOrigin(enemy))
-            if distance < context.closest_enemy_distance then
-                context.closest_enemy = enemy
-                context.closest_enemy_distance = distance
+            if distance < context.closest_enemy_hero_distance then
+                context.closest_enemy_hero = enemy
+                context.closest_enemy_hero_distance = distance
             end
             table.insert(context.enemies, enemy)
         end
+    end
+
+    local search_radius = math.max((agent.creep_data and agent.creep_data.engage_distance or 700) + 400, 1200)
+    local units = Entity.GetUnitsInRadius(agent.unit, search_radius, Enum.TeamType.TEAM_ENEMY, true, true)
+    if units then
+        for _, enemy in ipairs(units) do
+            if Entity.IsAlive(enemy) and not NPC.IsCourier(enemy) then
+                local distance = Distance(unit_origin, Entity.GetAbsOrigin(enemy))
+                if distance < context.closest_enemy_unit_distance then
+                    context.closest_enemy_unit = enemy
+                    context.closest_enemy_unit_distance = distance
+                end
+            end
+        end
+    end
+
+    if context.closest_enemy_hero then
+        context.primary_target = context.closest_enemy_hero
+        context.primary_target_distance = context.closest_enemy_hero_distance
+    elseif context.closest_enemy_unit then
+        context.primary_target = context.closest_enemy_unit
+        context.primary_target_distance = context.closest_enemy_unit_distance
     end
 
     return context
@@ -118,6 +173,7 @@ function Agent.new(unit, creep_data)
         manual_override_until = 0,
         thought = "Инициализация",
         target = nil,
+        attack_move_position = nil,
     }, Agent)
 end
 
@@ -206,14 +262,30 @@ local function EvaluateState(agent, context)
         agent.state = STATES.FOLLOWING
     end
 
-    if context.closest_enemy and context.closest_enemy_distance <= agent.creep_data.engage_distance then
+    if shared_command_expire_time > time_now then
+        if shared_attack_target and Entity.IsAlive(shared_attack_target) and not Entity.IsSameTeam(shared_attack_target, my_hero) then
+            agent.state = STATES.FIGHTING
+            agent.target = shared_attack_target
+            return
+        elseif shared_attack_position then
+            agent.state = STATES.SUPPORTING
+            agent.attack_move_position = shared_attack_position
+            agent.target = nil
+            return
+        end
+    else
+        ClearSharedCommand()
+    end
+
+    if context.primary_target and context.primary_target_distance <= agent.creep_data.engage_distance then
         agent.state = STATES.FIGHTING
-        agent.target = context.closest_enemy
+        agent.target = context.primary_target
         return
     end
 
     agent.state = STATES.FOLLOWING
     agent.target = nil
+    agent.attack_move_position = nil
 end
 
 local function ExecuteState(agent, context)
@@ -241,8 +313,26 @@ local function ExecuteState(agent, context)
         else
             agent.state = STATES.FOLLOWING
             agent.target = nil
+            agent.attack_move_position = nil
         end
         agent.next_action_time = time_now + 0.4
+        return
+    end
+
+    if agent.state == STATES.SUPPORTING then
+        if shared_command_expire_time <= time_now then
+            agent.state = STATES.FOLLOWING
+            agent.attack_move_position = nil
+        else
+            local destination = agent.attack_move_position or context.hero_origin
+            if destination then
+                agent:MoveTo(destination)
+                agent.thought = "Поддерживаю атаку"
+            else
+                agent.state = STATES.FOLLOWING
+            end
+        end
+        agent.next_action_time = time_now + 0.35
         return
     end
 
@@ -293,6 +383,7 @@ local function RefreshAgents()
                     agent_manager[handle] = Agent.new(unit, agent_script.creep_data[unit_name])
                 else
                     agent_manager[handle].creep_data = agent_script.creep_data[unit_name]
+                    agent_manager[handle].unit = unit
                 end
             end
         end
@@ -357,7 +448,7 @@ local function InitializeCreepData()
                     display_name = "War Stomp",
                     icon = "panorama/images/spellicons/centaur_khan_warstomp_png.vtex_c",
                     condition = function(agent, ability, context)
-                        return context.closest_enemy and context.closest_enemy_distance <= 250 and not NPC.IsMagicImmune(context.closest_enemy)
+                        return context.primary_target and context.primary_target_distance <= 250 and not NPC.IsMagicImmune(context.primary_target)
                     end,
                     execute = function(agent, ability)
                         CastAbilityNoTarget(ability)
@@ -378,10 +469,10 @@ local function InitializeCreepData()
                     display_name = "Ensnare",
                     icon = "panorama/images/spellicons/dark_troll_warlord_ensnare_png.vtex_c",
                     condition = function(agent, ability, context)
-                        return context.closest_enemy and context.closest_enemy_distance <= 550 and not NPC.IsMagicImmune(context.closest_enemy)
+                        return context.primary_target and context.primary_target_distance <= 550 and not NPC.IsMagicImmune(context.primary_target)
                     end,
                     execute = function(agent, ability, context)
-                        CastAbilityTarget(ability, context.closest_enemy)
+                        CastAbilityTarget(ability, context.primary_target)
                     end,
                     thought = "Сеткую врага",
                 },
@@ -391,7 +482,7 @@ local function InitializeCreepData()
                     display_name = "Raise Dead",
                     icon = "panorama/images/spellicons/dark_troll_warlord_raise_dead_png.vtex_c",
                     condition = function(agent, ability, context)
-                        return context.closest_enemy ~= nil and NPC.GetMana(agent.unit) >= Ability.GetManaCost(ability)
+                        return context.primary_target ~= nil and NPC.GetMana(agent.unit) >= Ability.GetManaCost(ability)
                     end,
                     execute = function(agent, ability)
                         CastAbilityNoTarget(ability)
@@ -412,13 +503,13 @@ local function InitializeCreepData()
                     display_name = "Purge",
                     icon = "panorama/images/spellicons/satyr_trickster_purge_png.vtex_c",
                     condition = function(agent, ability, context)
-                        if not context.closest_enemy or context.closest_enemy_distance > 600 then
+                        if not context.primary_target or context.primary_target_distance > 600 then
                             return false
                         end
-                        return not NPC.IsMagicImmune(context.closest_enemy)
+                        return not NPC.IsMagicImmune(context.primary_target)
                     end,
                     execute = function(agent, ability, context)
-                        CastAbilityTarget(ability, context.closest_enemy)
+                        CastAbilityTarget(ability, context.primary_target)
                     end,
                     thought = "Снимаю баф врага",
                 },
@@ -436,13 +527,13 @@ local function InitializeCreepData()
                     display_name = "Shockwave",
                     icon = "panorama/images/spellicons/satyr_hellcaller_shockwave_png.vtex_c",
                     condition = function(agent, ability, context)
-                        if not context.closest_enemy or context.closest_enemy_distance > 900 then
+                        if not context.primary_target or context.primary_target_distance > 900 then
                             return false
                         end
                         return true
                     end,
                     execute = function(agent, ability, context)
-                        local position = Entity.GetAbsOrigin(context.closest_enemy)
+                        local position = Entity.GetAbsOrigin(context.primary_target)
                         CastAbilityPosition(ability, position)
                     end,
                     thought = "Запускаю шоквейв",
@@ -492,7 +583,7 @@ local function InitializeCreepData()
                     display_name = "Howl",
                     icon = "panorama/images/spellicons/alpha_wolf_howl_png.vtex_c",
                     condition = function(agent, ability, context)
-                        if not context.closest_enemy or context.closest_enemy_distance > 900 then
+                        if not context.primary_target or context.primary_target_distance > 900 then
                             return false
                         end
                         return true
@@ -516,13 +607,13 @@ local function InitializeCreepData()
                     display_name = "Hurl Boulder",
                     icon = "panorama/images/spellicons/mud_golem_hurl_boulder_png.vtex_c",
                     condition = function(agent, ability, context)
-                        if not context.closest_enemy or context.closest_enemy_distance > 700 then
+                        if not context.primary_target or context.primary_target_distance > 700 then
                             return false
                         end
-                        return not NPC.IsMagicImmune(context.closest_enemy)
+                        return not NPC.IsMagicImmune(context.primary_target)
                     end,
                     execute = function(agent, ability, context)
-                        CastAbilityTarget(ability, context.closest_enemy)
+                        CastAbilityTarget(ability, context.primary_target)
                     end,
                     thought = "Оглушаю булыжником",
                 },
@@ -540,13 +631,13 @@ local function InitializeCreepData()
                     display_name = "Granite Boulder",
                     icon = "panorama/images/spellicons/ancient_golem_boulder_png.vtex_c",
                     condition = function(agent, ability, context)
-                        if not context.closest_enemy or context.closest_enemy_distance > 700 then
+                        if not context.primary_target or context.primary_target_distance > 700 then
                             return false
                         end
-                        return not NPC.IsMagicImmune(context.closest_enemy)
+                        return not NPC.IsMagicImmune(context.primary_target)
                     end,
                     execute = function(agent, ability, context)
-                        CastAbilityTarget(ability, context.closest_enemy)
+                        CastAbilityTarget(ability, context.primary_target)
                     end,
                     thought = "Запускаю валун",
                 },
@@ -564,13 +655,13 @@ local function InitializeCreepData()
                     display_name = "Fireball",
                     icon = "panorama/images/spellicons/black_dragon_fireball_png.vtex_c",
                     condition = function(agent, ability, context)
-                        if not context.closest_enemy or context.closest_enemy_distance > 900 then
+                        if not context.primary_target or context.primary_target_distance > 900 then
                             return false
                         end
                         return true
                     end,
                     execute = function(agent, ability, context)
-                        local position = Entity.GetAbsOrigin(context.closest_enemy)
+                        local position = Entity.GetAbsOrigin(context.primary_target)
                         CastAbilityPosition(ability, position)
                     end,
                     thought = "Огненное дыхание",
@@ -589,7 +680,7 @@ local function InitializeCreepData()
                     display_name = "Slam",
                     icon = "panorama/images/spellicons/ancient_thunderhide_slam_png.vtex_c",
                     condition = function(agent, ability, context)
-                        return context.closest_enemy and context.closest_enemy_distance <= 250 and not NPC.IsMagicImmune(context.closest_enemy)
+                        return context.primary_target and context.primary_target_distance <= 250 and not NPC.IsMagicImmune(context.primary_target)
                     end,
                     execute = function(agent, ability)
                         CastAbilityNoTarget(ability)
@@ -658,10 +749,10 @@ local function InitializeCreepData()
                     display_name = "Freeze",
                     icon = "panorama/images/spellicons/ancient_ice_shaman_freeze_png.vtex_c",
                     condition = function(agent, ability, context)
-                        return context.closest_enemy and context.closest_enemy_distance <= 700 and not NPC.IsMagicImmune(context.closest_enemy)
+                        return context.primary_target and context.primary_target_distance <= 700 and not NPC.IsMagicImmune(context.primary_target)
                     end,
                     execute = function(agent, ability, context)
-                        CastAbilityTarget(ability, context.closest_enemy)
+                        CastAbilityTarget(ability, context.primary_target)
                     end,
                     thought = "Замораживаю",
                 },
@@ -676,10 +767,12 @@ end
 
 function agent_script.OnUpdate()
     if not agent_script.ui.enable or not agent_script.ui.enable:Get() then
+        ClearSharedCommand()
         return
     end
 
     if not Engine.IsInGame() then
+        ClearSharedCommand()
         return
     end
 
@@ -688,6 +781,7 @@ function agent_script.OnUpdate()
 
     if not my_hero or not Entity.IsAlive(my_hero) or not local_player then
         agent_manager = {}
+        ClearSharedCommand()
         return
     end
 
@@ -755,18 +849,50 @@ function agent_script.OnPrepareUnitOrders(data)
         return true
     end
 
-    local selected_units = Player.GetSelectedUnits(player)
-    if not selected_units then
-        return true
-    end
-
     local time_now = GlobalVars.GetCurTime()
 
-    for _, unit in ipairs(selected_units) do
-        local handle = Entity.GetIndex(unit)
-        local agent = agent_manager[handle]
-        if agent then
-            agent.manual_override_until = time_now + 4.0
+    local hero_in_command = false
+    if my_hero then
+        if data.npc and data.npc == my_hero then
+            hero_in_command = true
+        elseif data.units then
+            for _, unit in ipairs(data.units) do
+                if unit == my_hero then
+                    hero_in_command = true
+                    break
+                end
+            end
+        end
+    end
+
+    if hero_in_command then
+        if data.order == Enum.UnitOrder.DOTA_UNIT_ORDER_ATTACK_TARGET and data.target then
+            SetSharedAttackTarget(data.target)
+        elseif data.order == Enum.UnitOrder.DOTA_UNIT_ORDER_ATTACK_MOVE then
+            if data.position then
+                SetSharedAttackPosition(data.position)
+            end
+        elseif data.order == Enum.UnitOrder.DOTA_UNIT_ORDER_CAST_TARGET and data.target then
+            if data.ability and not Entity.IsSameTeam(data.target, my_hero) then
+                SetSharedAttackTarget(data.target)
+            end
+        elseif data.order == Enum.UnitOrder.DOTA_UNIT_ORDER_CAST_POSITION and data.position then
+            SetSharedAttackPosition(data.position)
+        elseif data.order == Enum.UnitOrder.DOTA_UNIT_ORDER_STOP or data.order == Enum.UnitOrder.DOTA_UNIT_ORDER_HOLD_POSITION then
+            ClearSharedCommand()
+        elseif data.order == Enum.UnitOrder.DOTA_UNIT_ORDER_MOVE_TO_POSITION then
+            ClearSharedCommand()
+        end
+    end
+
+    local selected_units = Player.GetSelectedUnits(player)
+    if selected_units then
+        for _, unit in ipairs(selected_units) do
+            local handle = Entity.GetIndex(unit)
+            local agent = agent_manager[handle]
+            if agent then
+                agent.manual_override_until = time_now + 4.0
+            end
         end
     end
 
@@ -777,6 +903,7 @@ function agent_script.OnGameEnd()
     agent_manager = {}
     my_hero = nil
     local_player = nil
+    ClearSharedCommand()
 end
 
 InitializeCreepData()
