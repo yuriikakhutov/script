@@ -79,6 +79,10 @@ local function IsControlledUnit(unit)
         return false
     end
 
+    if NPC.IsCourier(unit) then
+        return false
+    end
+
     if local_player_id and not NPC.IsControllableByPlayer(unit, local_player_id) then
         return false
     end
