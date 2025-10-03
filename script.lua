@@ -380,6 +380,7 @@ local DARK_TROLL_RAISE_DEAD_METADATA = {
     requires_charges = true,
     always_cast = true,
     min_enemies = 0,
+    ignore_is_castable = true,
 }
 
 local ABILITY_DATA = {
@@ -492,6 +493,63 @@ local ABILITY_DATA = {
         execute_threshold_special = "kill_threshold",
     },
 }
+
+local function TryCastDarkTrollRaiseDead(unit)
+    if not unit then
+        return nil
+    end
+
+    local unit_name = NPC.GetUnitName(unit)
+    if unit_name ~= "npc_dota_neutral_dark_troll_warlord" then
+        return nil
+    end
+
+    local ability = NPC.GetAbility(unit, "dark_troll_warlord_raise_dead_datadriven")
+        or NPC.GetAbility(unit, "dark_troll_warlord_raise_dead")
+
+    if not ability or Ability.GetLevel(ability) <= 0 then
+        return nil
+    end
+
+    local mana = NPC.GetMana(unit) or 0
+    local charges = GetAbilityCharges(ability)
+
+    if charges ~= nil and charges <= 0 then
+        return nil
+    end
+
+    local is_ready = true
+    if type(Ability.IsReady) == "function" then
+        is_ready = Ability.IsReady(ability)
+    end
+
+    if not is_ready and charges and charges > 0 then
+        is_ready = true
+    end
+
+    if not is_ready then
+        return nil
+    end
+
+    local ignore_castable = (charges and charges > 0)
+    if not ignore_castable and type(Ability.IsCastable) == "function" then
+        if not Ability.IsCastable(ability, mana) then
+            return nil
+        end
+    end
+
+    Ability.CastNoTarget(ability)
+    return DARK_TROLL_RAISE_DEAD_METADATA.display
+end
+
+local function TryHandleUnitOverrides(unit, current_target)
+    local cast = TryCastDarkTrollRaiseDead(unit)
+    if cast then
+        return cast
+    end
+
+    return nil
+end
 
 local function GetAbilityMetadata(name)
     if not name then
@@ -710,8 +768,10 @@ local function TryCastAbility(unit, ability, metadata, current_target)
         return nil
     end
 
-    if type(Ability.IsCastable) == "function" and not Ability.IsCastable(ability, mana) then
-        return nil
+    if not (metadata and metadata.ignore_is_castable) then
+        if type(Ability.IsCastable) == "function" and not Ability.IsCastable(ability, mana) then
+            return nil
+        end
     end
 
     local ability_name = Ability.GetName(ability) or "ability"
@@ -869,6 +929,11 @@ end
 local function TryUseAbilities(unit, current_target)
     if not unit then
         return nil
+    end
+
+    local override_cast = TryHandleUnitOverrides(unit, current_target)
+    if override_cast then
+        return override_cast
     end
 
     local auto_cast_enabled = ShouldAutoCast()
