@@ -3,7 +3,13 @@ local agent_script = {}
 agent_script.ui = {}
 
 local DEFAULT_FOLLOW_DISTANCE = 300
+local DEFAULT_ATTACK_RADIUS = 900
 local ORDER_COOLDOWN = 0.3
+
+local bit_lib = bit32 or bit
+local ABILITY_BEHAVIOR_UNIT_TARGET = (Enum.AbilityBehavior and Enum.AbilityBehavior.DOTA_ABILITY_BEHAVIOR_UNIT_TARGET) or 0
+local TARGET_TEAM_ENEMY = Enum.TargetTeam and Enum.TargetTeam.TEAM_ENEMY
+local TARGET_TEAM_BOTH = Enum.TargetTeam and Enum.TargetTeam.TEAM_BOTH
 
 local my_hero = nil
 local local_player = nil
@@ -60,6 +66,21 @@ local function EnsureMenu()
     if type(target_group.Slider) == "function" then
         agent_script.ui.follow_distance = target_group:Slider("Дистанция следования", 100, 800, DEFAULT_FOLLOW_DISTANCE, "%d")
         ApplyTooltip(agent_script.ui.follow_distance, "На каком расстоянии от героя должны находиться контролируемые юниты.")
+    end
+
+    if type(target_group.Switch) == "function" then
+        agent_script.ui.auto_attack = target_group:Switch("Автоатака", true, "\u{f0e7}")
+        ApplyTooltip(agent_script.ui.auto_attack, "Автоматически атаковать ближайших врагов в радиусе.")
+    end
+
+    if type(target_group.Slider) == "function" then
+        agent_script.ui.attack_radius = target_group:Slider("Радиус атаки", 300, 1200, DEFAULT_ATTACK_RADIUS, "%d")
+        ApplyTooltip(agent_script.ui.attack_radius, "Расстояние вокруг героя, в пределах которого ищутся цели для атаки.")
+    end
+
+    if type(target_group.Switch) == "function" then
+        agent_script.ui.auto_cast = target_group:Switch("Авто использование навыков", true, "\u{f0a4}")
+        ApplyTooltip(agent_script.ui.auto_cast, "Автоматически применять направленные способности юнитов по их цели.")
     end
 
     if type(target_group.Switch) == "function" then
@@ -158,6 +179,101 @@ local function GetFollowDistance()
     return DEFAULT_FOLLOW_DISTANCE
 end
 
+local function GetAttackRadius()
+    if agent_script.ui.attack_radius then
+        return agent_script.ui.attack_radius:Get()
+    end
+
+    return DEFAULT_ATTACK_RADIUS
+end
+
+local function ShouldAutoAttack()
+    return agent_script.ui.auto_attack and agent_script.ui.auto_attack:Get()
+end
+
+local function ShouldAutoCast()
+    return agent_script.ui.auto_cast and agent_script.ui.auto_cast:Get()
+end
+
+local function AcquireAttackTarget(hero_pos)
+    if not my_hero then
+        return nil
+    end
+
+    local hero_team = Entity.GetTeamNum(my_hero)
+    local search_radius = GetAttackRadius()
+    local enemies = NPCs.InRadius(hero_pos, search_radius, hero_team, Enum.TeamType.TEAM_ENEMY) or {}
+
+    local best_target = nil
+    local best_score = -math.huge
+
+    for _, enemy in ipairs(enemies) do
+        if Entity.IsAlive(enemy) and not NPC.IsCourier(enemy) then
+            local enemy_pos = Entity.GetAbsOrigin(enemy)
+            local distance = hero_pos:Distance(enemy_pos)
+            local score = -distance
+
+            if NPC.IsHero(enemy) then
+                score = score + 1000
+            elseif NPC.IsCreep(enemy) then
+                if NPC.IsLaneCreep(enemy) then
+                    score = score - 50
+                else
+                    score = score + 100
+                end
+            end
+
+            if score > best_score then
+                best_score = score
+                best_target = enemy
+            end
+        end
+    end
+
+    return best_target
+end
+
+local function CastTargetedAbilities(unit, target)
+    if not ShouldAutoCast() or not unit or not target then
+        return nil
+    end
+
+    if NPC.IsChannellingAbility(unit) then
+        return nil
+    end
+
+    local mana = NPC.GetMana(unit)
+
+    for slot = 0, 5 do
+        local ability = NPC.GetAbilityByIndex(unit, slot)
+        if ability and Ability.GetLevel(ability) > 0 then
+            if Ability.IsReady(ability) and Ability.IsCastable(ability, mana) then
+                local behavior = bit_lib and Ability.GetBehavior and Ability.GetBehavior(ability)
+                local is_targeted = false
+
+                if behavior and bit_lib and ABILITY_BEHAVIOR_UNIT_TARGET ~= 0 then
+                    if bit_lib.band(behavior, ABILITY_BEHAVIOR_UNIT_TARGET) ~= 0 then
+                        is_targeted = true
+                    end
+                end
+
+                if is_targeted then
+                    local target_team = Ability.GetTargetTeam and Ability.GetTargetTeam(ability)
+                    if target_team == nil
+                        or (TARGET_TEAM_ENEMY and target_team == TARGET_TEAM_ENEMY)
+                        or (TARGET_TEAM_BOTH and target_team == TARGET_TEAM_BOTH)
+                    then
+                        Ability.CastTarget(ability, target)
+                        return Ability.GetName(ability) or "ability"
+                    end
+                end
+            end
+        end
+    end
+
+    return nil
+end
+
 local function IssueFollowOrders()
     if not my_hero or not local_player then
         return
@@ -167,6 +283,11 @@ local function IssueFollowOrders()
     local current_time = GlobalVars.GetCurTime()
 
     local follow_distance = GetFollowDistance()
+    local current_target = nil
+
+    if ShouldAutoAttack() then
+        current_target = AcquireAttackTarget(hero_pos)
+    end
 
     for handle, follower in pairs(followers) do
         local unit = follower.unit
@@ -182,7 +303,27 @@ local function IssueFollowOrders()
             local unit_pos = Entity.GetAbsOrigin(unit)
             local distance = hero_pos:Distance(unit_pos)
 
-            if distance > follow_distance then
+            if current_target and Entity.IsAlive(current_target) then
+                local ability_cast = CastTargetedAbilities(unit, current_target)
+                if ability_cast then
+                    follower.last_action = string.format("Использую: %s", ability_cast)
+                    follower.next_action_time = current_time + ORDER_COOLDOWN
+                    goto continue
+                end
+
+                Player.PrepareUnitOrders(
+                    local_player,
+                    Enum.UnitOrder.DOTA_UNIT_ORDER_ATTACK_TARGET,
+                    current_target,
+                    nil,
+                    nil,
+                    Enum.PlayerOrderIssuer.DOTA_ORDER_ISSUER_PASSED_UNIT_ONLY,
+                    unit
+                )
+                local target_name = NPC.GetUnitName(current_target) or "цель"
+                follower.last_action = string.format("Атакую: %s", target_name)
+                follower.next_action_time = current_time + ORDER_COOLDOWN
+            elseif distance > follow_distance then
                 Player.PrepareUnitOrders(
                     local_player,
                     Enum.UnitOrder.DOTA_UNIT_ORDER_MOVE_TO_POSITION,
