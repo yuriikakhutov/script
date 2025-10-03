@@ -243,6 +243,31 @@ local function GetUnitHealthPercent(unit)
     return (health / max_health) * 100
 end
 
+local function GetAbilitySpecialValue(ability, key, default)
+    if not ability or not key then
+        return default
+    end
+
+    if type(Ability.GetLevelSpecialValueFor) == "function" then
+        local level = Ability.GetLevel(ability)
+        if level and level > 0 then
+            local ok, value = pcall(Ability.GetLevelSpecialValueFor, ability, key, level - 1)
+            if ok and type(value) == "number" then
+                return value
+            end
+        end
+    end
+
+    if type(Ability.GetSpecialValueFor) == "function" then
+        local ok, value = pcall(Ability.GetSpecialValueFor, ability, key)
+        if ok and type(value) == "number" then
+            return value
+        end
+    end
+
+    return default
+end
+
 local function GetAbilityCharges(ability)
     if not ability then
         return nil
@@ -353,6 +378,29 @@ local ABILITY_DATA = {
         requires_charges = true,
         min_enemies = 0,
     },
+    axe_berserkers_call = {
+        type = "no_target",
+        display = "Berserker's Call",
+        radius = 325,
+        min_enemies = 1,
+    },
+    axe_battle_hunger = {
+        type = "target",
+        display = "Battle Hunger",
+        range_buffer = 25,
+        only_heroes = true,
+        avoid_enemy_modifier = "modifier_axe_battle_hunger",
+        exclude_illusions = true,
+    },
+    axe_culling_blade = {
+        type = "target",
+        display = "Culling Blade",
+        range_buffer = 25,
+        only_heroes = true,
+        exclude_illusions = true,
+        execute_threshold_values = { 250, 350, 450 },
+        execute_threshold_special = "kill_threshold",
+    },
 }
 
 local function GetAbilityMetadata(name)
@@ -462,6 +510,73 @@ local function ChooseAllyTarget(unit, metadata)
     return nil
 end
 
+local function EnemySatisfiesMetadata(enemy, metadata, ability)
+    if not enemy or not metadata then
+        return false
+    end
+
+    if not Entity.IsAlive(enemy) then
+        return false
+    end
+
+    if metadata.only_heroes and not NPC.IsHero(enemy) then
+        return false
+    end
+
+    if metadata.only_creeps and not NPC.IsCreep(enemy) then
+        return false
+    end
+
+    if metadata.exclude_illusions and NPC.IsIllusion(enemy) then
+        return false
+    end
+
+    if metadata.min_mana_on_target and NPC.GetMana(enemy) < metadata.min_mana_on_target then
+        return false
+    end
+
+    if metadata.max_enemy_health_pct then
+        local health_pct = GetUnitHealthPercent(enemy)
+        if health_pct > metadata.max_enemy_health_pct then
+            return false
+        end
+    end
+
+    if metadata.max_enemy_health and Entity.GetHealth(enemy) > metadata.max_enemy_health then
+        return false
+    end
+
+    if metadata.avoid_enemy_modifier and NPC.HasModifier(enemy, metadata.avoid_enemy_modifier) then
+        return false
+    end
+
+    if ability and (metadata.execute_threshold_values or metadata.execute_threshold_special or metadata.execute_threshold) then
+        local threshold = metadata.execute_threshold or 0
+
+        if metadata.execute_threshold_values then
+            local level = Ability.GetLevel(ability)
+            if level and level > 0 then
+                threshold = metadata.execute_threshold_values[level] or metadata.execute_threshold_values[#metadata.execute_threshold_values]
+            else
+                threshold = metadata.execute_threshold_values[1]
+            end
+        end
+
+        if metadata.execute_threshold_special then
+            local special_value = GetAbilitySpecialValue(ability, metadata.execute_threshold_special, threshold)
+            if type(special_value) == "number" then
+                threshold = special_value
+            end
+        end
+
+        if threshold and threshold > 0 and Entity.GetHealth(enemy) > threshold then
+            return false
+        end
+    end
+
+    return true
+end
+
 local function TryCastAbility(unit, ability, metadata, current_target)
     if not metadata then
         return nil
@@ -481,20 +596,50 @@ local function TryCastAbility(unit, ability, metadata, current_target)
 
     if metadata.type == "target" then
         local target = current_target
-        if metadata.only_heroes and target and not NPC.IsHero(target) then
+
+        if target and not EnemySatisfiesMetadata(target, metadata, ability) then
             target = nil
         end
 
-        if not target or not Entity.IsAlive(target) then
-            return nil
+        if target then
+            local target_pos = Entity.GetAbsOrigin(target)
+            if not IsInExtendedRange(unit_pos, target_pos, ability, metadata) then
+                target = nil
+            end
         end
 
-        if metadata.min_mana_on_target and NPC.GetMana(target) < metadata.min_mana_on_target then
-            return nil
+        if not target then
+            local hero_team = my_hero and Entity.GetTeamNum(my_hero)
+            local search_radius = (metadata.fixed_range or (Ability.GetCastRange and Ability.GetCastRange(ability)) or 600)
+            search_radius = search_radius + (metadata.range_buffer or 0) + (metadata.search_radius_bonus or 0)
+
+            local enemies = (hero_team and NPCs.InRadius(unit_pos, search_radius, hero_team, Enum.TeamType.TEAM_ENEMY)) or {}
+            local best_target = nil
+            local best_score = -math.huge
+
+            for _, enemy in ipairs(enemies) do
+                if EnemySatisfiesMetadata(enemy, metadata, ability) then
+                    local enemy_pos = Entity.GetAbsOrigin(enemy)
+                    if IsInExtendedRange(unit_pos, enemy_pos, ability, metadata) then
+                        local score = -unit_pos:Distance(enemy_pos)
+                        if NPC.IsHero(enemy) then
+                            score = score + 250
+                        end
+                        if current_target and enemy == current_target then
+                            score = score + 500
+                        end
+                        if score > best_score then
+                            best_score = score
+                            best_target = enemy
+                        end
+                    end
+                end
+            end
+
+            target = best_target
         end
 
-        local target_pos = Entity.GetAbsOrigin(target)
-        if not IsInExtendedRange(unit_pos, target_pos, ability, metadata) then
+        if not target then
             return nil
         end
 
@@ -502,15 +647,47 @@ local function TryCastAbility(unit, ability, metadata, current_target)
         return metadata.display or ability_name
     elseif metadata.type == "point" then
         local target = current_target
-        if not target or not Entity.IsAlive(target) then
+
+        if target and not EnemySatisfiesMetadata(target, metadata, ability) then
+            target = nil
+        end
+
+        if target then
+            local target_pos = Entity.GetAbsOrigin(target)
+            if not IsInExtendedRange(unit_pos, target_pos, ability, metadata) then
+                target = nil
+            end
+        end
+
+        if not target then
+            local hero_team = my_hero and Entity.GetTeamNum(my_hero)
+            local search_radius = (metadata.fixed_range or (Ability.GetCastRange and Ability.GetCastRange(ability)) or 600)
+            search_radius = search_radius + (metadata.range_buffer or 0) + (metadata.search_radius_bonus or 0)
+            local enemies = (hero_team and NPCs.InRadius(unit_pos, search_radius, hero_team, Enum.TeamType.TEAM_ENEMY)) or {}
+            local best_target = nil
+            local best_distance = math.huge
+
+            for _, enemy in ipairs(enemies) do
+                if EnemySatisfiesMetadata(enemy, metadata, ability) then
+                    local enemy_pos = Entity.GetAbsOrigin(enemy)
+                    if IsInExtendedRange(unit_pos, enemy_pos, ability, metadata) then
+                        local distance = unit_pos:Distance(enemy_pos)
+                        if distance < best_distance then
+                            best_distance = distance
+                            best_target = enemy
+                        end
+                    end
+                end
+            end
+
+            target = best_target
+        end
+
+        if not target then
             return nil
         end
 
         local target_pos = Entity.GetAbsOrigin(target)
-        if not IsInExtendedRange(unit_pos, target_pos, ability, metadata) then
-            return nil
-        end
-
         Ability.CastPosition(ability, target_pos)
         return metadata.display or ability_name
     elseif metadata.type == "no_target" then
