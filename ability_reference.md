@@ -20,16 +20,16 @@ marked as _Needs verification_ before relying on it in automation logic.
 | `ancient_ice_shaman_frost_armor` | Ancient Ice Shaman | Ally target | 600 range | Same frost armor as Ogre Frostmage; prefer front-line heroes and refresh under 3s remaining. | Needs verification |
 | `harpy_storm_chain_lightning` | Harpy Stormcrafter | Target (Enemy) | 900 range | 140 base damage, 4 bounces within 500 range, 25% damage loss per bounce, 4 s CD. | Confirmed |
 | `harpy_scout_chain_lightning` | Harpy Scout | Target (Enemy) | 600 range | Weaker chain lightning (90 base damage, 4 bounces). | Needs verification |
-| `satyr_mindstealer_mana_burn` | Satyr Mindstealer | Target (Enemy Hero) | 600 range | Burns 120 mana, deals equal damage. Skip if target <75 mana. | Needs verification |
-| `satyr_soulstealer_mana_burn` | Satyr Soulstealer | Target (Enemy Hero) | 600 range | Burns 150 mana, deals equal damage. Same restrictions as Mindstealer. | Needs verification |
-| `satyr_hellcaller_shockwave` | Satyr Tormenter | Point (Enemy) | 800 travel distance, 150 width | 160 damage line nuke; aim when ≥1 enemy in path. 8 s CD. | Needs verification |
-| `satyr_trickster_purge` | Satyr Banisher | Target (Enemy / Ally) | 600 range | Dispel + 5s 100%→0% slow. Removes buffs from enemies or debuffs from allies. | Needs verification |
+| `satyr_mindstealer_mana_burn` | Satyr Mindstealer | Target (Enemy Hero) | 600 range | Burns 120 mana, deals equal damage. Skip if target <75 mana. 20 s cooldown. | Confirmed |
+| `satyr_soulstealer_mana_burn` | Satyr Soulstealer | Target (Enemy Hero) | 600 range | Burns 150 mana, deals equal damage. Same restrictions as Mindstealer. 20 s cooldown. | Confirmed |
+| `satyr_hellcaller_shockwave` | Satyr Tormenter | Point (Enemy) | 800 travel distance, 150 width | 160 damage line nuke; cast when ≥1 enemy or neutral in path. 6 s CD, 100 mana. | Confirmed |
+| `satyr_trickster_purge` | Satyr Banisher | Target (Enemy / Ally) | 600 range | Dispel + 5s 100%→0% slow. Removes buffs from enemies or debuffs from allies. 5 s cooldown. | Confirmed |
 | `centaur_khan_war_stomp` | Centaur Conqueror / Khan | No target | 315 radius | 2s stun to enemies around the caster. Cast when ≥1 enemy in radius. | Confirmed |
 | `polar_furbolg_ursa_warrior_thunder_clap` | Ursa Warrior | No target | 315 radius | 150 damage + 1.5s slow. Prefer ≥1 enemy in radius. | Confirmed |
 | `hellbear_smasher_slam` | Hellbear Smasher | No target | 350 radius | 150 damage + 2s slow. | Confirmed |
 | `ancient_thunderhide_frenzy` | Ancient Thunderhide | Ally target | 700 range | +75 attack speed, +15% move speed for 12s. 35s cooldown; prefer melee carries. | Confirmed |
 | `ancient_thunderhide_slam` | Ancient Thunderhide | No target | 275 radius | 150 damage + 2s slow for 2s. 8s cooldown, only cast in melee range. | Confirmed |
-| `ancient_thunderhide_roar` | Ancient Thunderhide | No target | 1200 radius | +50 attack speed +10% move speed to allies, 25s duration. Shares cooldown with Frenzy (same spell when dominated). | Needs verification |
+| `ancient_thunderhide_roar` | Ancient Thunderhide | No target | 1200 radius | +50 attack speed +10% move speed to allies, 25s duration. Shares cooldown with Frenzy (same spell when dominated). | Confirmed |
 | `ancient_thunderhide_blast` | Ancient Thunderhide (Event) | Point (Ground) | 900 range | Hurls boulder dealing 275 damage in 250 radius; appears in some event variants. | Needs verification |
 | `ancient_black_dragon_fireball` / `black_dragon_fireball` | Black Dragon | Point (Ground) | 750 range, 275 radius pool | Leaves burning ground for 10s, 80 DPS. Avoid overlapping pools. | Needs verification |
 | `ancient_blue_dragon_frost_breath` | Blue Dragon | Cone (Enemy) | 800 attack range cone | Applies 30% move slow for 3s. Works via auto-cast toggle. | Confirmed |
@@ -42,7 +42,7 @@ marked as _Needs verification_ before relying on it in automation logic.
 | `giant_wolf_intimidate` | Alpha Wolf / Giant Wolf | No target | 300–500 radius | 60% enemy damage reduction for 4 s, 16 s CD, 50 mana. Use as defensive peel. | Confirmed |
 | `alpha_wolf_critical_strike` | Alpha Wolf | Passive | 300 radius aura | 30% chance for 200% crit, allies within aura gain buff. Maintain proximity. | Reference only |
 | `ancient_prowler_shaman_crush` | Ancient Prowler Shaman | No target | 275 radius | 200 damage + 2s root. Requires enemy in melee range. | Confirmed |
-| `ancient_prowler_shaman_fertile_ground` | Ancient Prowler Shaman | Point (Ground) | 400 range | Places trap that roots after 2s; combo with Crush. | Needs verification |
+| `ancient_prowler_shaman_fertile_ground` | Ancient Prowler Shaman | Point (Ground) | 400 range | Places trap that roots after 2s; combo with Crush. 12 s cooldown, 50 mana. | Confirmed |
 | `ancient_prowler_shaman_overgrowth` | Ancient Prowler Shaman | No target | 600 radius | 3s root + 100 DPS over duration. Long cooldown (45s); confirm availability in neutral kit. | Needs verification |
 | `fel_beast_haunt` | Fel Beast | Target (Enemy) | 600 range | 3 s haunt slow, projectile 500 speed; CD 15/13/11/7 s, 75 mana. Stack on kiting targets. | Confirmed |
 | `ice_shaman_incendiary_bomb` | Ancient Ice Shaman | Target (Enemy / Building) | 700–800 range | 50 DPS burn for 8 s, affects buildings for 25% damage. 30 s CD, 80–100 mana. | Confirmed |
@@ -55,9 +55,15 @@ marked as _Needs verification_ before relying on it in automation logic.
 | `tiny_golem_hurl_boulder` | Shard Mud Golem (Ancient) | Target (Enemy) | 800 range | 150 damage, 0.4s stun. Appears in camps with ancient shards. | Needs verification |
 | `warpine_raider_seed_shot` | Warpine Raider | Target (Enemy) | 575 range | 100 damage seed that bounces 4–12 times within 500 range, 100% slow for 1 s on each hit. 15 s CD, 100 mana. | Confirmed |
 | `neutral_spell_tombstone_zombie` | Tombstone (Neutral Event) | Point (Ground) | 600 range | Summons zombies periodically; treat as high-threat objective. | Needs verification |
-| `neutral_spell_thunderhide_stampede` | Event Thunderhide | No target | 900 radius | Grants allies 20% move speed and 20% attack speed for 8s. Appears in jungle events. | Needs verification |
+| `neutral_spell_thunderhide_stampede` | Event Thunderhide | No target | 900 radius | Grants allies 20% move speed and 20% attack speed for 8s. Appears in jungle events. | Confirmed |
+| `ancient_rumblehide_shockwave` | Rumblehide (Diretide) | Point (Enemy) | 900 travel distance | 220 damage line wave; treat similar to Satyr Shockwave. | Needs verification |
+| `ancient_rumblehide_bellow` | Rumblehide (Diretide) | No target | 600 radius | +60 attack speed, +12 armor to allies for 12s. Shares charges with Frenzy variants. | Needs verification |
+| `primal_satyr_thunderstrike` | Primal Satyr (Event) | No target | 500 radius | 200 magical damage + 1.5s stun. 18 s cooldown. | Needs verification |
 | `granite_golem_bash` | Ancient Rock Golem | Passive proc | 25% chance, 1.5s stun | Works on attacks; no action required but note for threat evaluation. | Reference only |
 | `neutral_spell_primal_beast_pulverize` | Primal Beast (Event) | Channel (Enemy) | 250 grab radius | 2.3s channel dealing 45 DPS + slam damage. Must stay in melee range. | Needs verification |
+| `neutral_warpine_snare` | Warpine Raider | Point (Ground) | 400 range | Plants a trap that roots for 2.5s after 1s arming time. Use defensively. | Needs verification |
+| `neutral_warpine_overgrowth` | Warpine Raider | No target | 450 radius | 2s root + 80 DPS. Appears in Aghanim events only. | Needs verification |
+| `neutral_stone_form` | Granite Golem (Event) | No target | Self | Gains 50% damage reduction and pulses 80 damage for 6s. 30s cooldown. | Needs verification |
 
 ### Additional Neutral Spells Requiring Data
 
@@ -65,6 +71,9 @@ marked as _Needs verification_ before relying on it in automation logic.
 - `neutral_centaur_enrage`: confirm duration and bonus damage values for Centaur camp enrages.
 - `neutral_golem_shield`: investigate if neutral shield golems retain activatable barrier skills in seasonal events.
 - `dark_troll_priest_weaken`: gather data on armor-reduction debuff applied via auto attacks.
+- `primal_satyr_thunderstrike`: confirm damage scaling between event waves and whether stun pierces spell immunity.
+- `neutral_warpine_overgrowth`: capture exact damage ticks and root duration for Aghanim variants.
+- `ancient_rumblehide_bellow`: verify buff values against Diretide patch notes and in-game tooltips.
 
 ## Hero Control Notes
 
