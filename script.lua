@@ -223,8 +223,8 @@ local function ResetState()
 end
 
 local function EnsureFont()
-  if not debug_font then
-    debug_font = Render.LoadFont("Arial", 12, Enum.FontCreate.FONTFLAG_OUTLINE)
+  if not debug_font and Render and Render.LoadFont then
+    debug_font = Render.LoadFont("Arial", Enum.FontCreate and Enum.FontCreate.FONTFLAG_OUTLINE or 0, 12)
   end
   return debug_font
 end
@@ -270,14 +270,6 @@ local function AcquirePlayerHandle()
     end
   end
 
-  if local_player_id ~= nil and Players and Players.GetPlayer then
-    local candidate = Players.GetPlayer(local_player_id)
-    if IsValidPlayerHandle(candidate) then
-      player_handle = candidate
-      return player_handle
-    end
-  end
-
   return player_handle
 end
 
@@ -286,7 +278,7 @@ local function EnsureMenu()
     return
   end
 
-  local tab = Menu.Create("Scripts", "Other", "Unit Followers")
+  local tab = Menu.Create("Scripts", "Other", "Unit Followers", "Unit Followers", "Main")
   if not tab then
     return
   end
@@ -342,10 +334,13 @@ local function GetPlayerID()
     end
   end
 
-  if Players and Players.GetLocalPlayerID then
-    local id = Players.GetLocalPlayerID()
-    if id ~= nil and id >= 0 then
-      return id
+  if Player and Player.GetPlayerID then
+    local handle = AcquirePlayerHandle()
+    if IsValidPlayerHandle(handle) then
+      local ok, id = pcall(Player.GetPlayerID, handle)
+      if ok and id ~= nil and id >= 0 then
+        return id
+      end
     end
   end
 
@@ -943,6 +938,69 @@ local function AcquireAttackTarget(unit, leash_position)
   return target
 end
 
+local function TryPrepareOrder(player, order, target, position, unit)
+  if not Player or not Player.PrepareUnitOrders or not player or not unit then
+    return false
+  end
+
+  local issuer = Enum.PlayerOrderIssuer and Enum.PlayerOrderIssuer.DOTA_ORDER_ISSUER_PASSED_UNIT_ONLY or 0
+  local ok = pcall(
+    Player.PrepareUnitOrders,
+    player,
+    order,
+    target,
+    position,
+    nil,
+    issuer,
+    unit,
+    false,
+    true,
+    true,
+    true
+  )
+
+  if not ok then
+    Player.PrepareUnitOrders(player, order, target, position, nil, issuer, unit)
+  end
+
+  return true
+end
+
+local function IssueAttackOrder(player, unit, target)
+  if not player or not unit or not target then
+    return false
+  end
+
+  if Player and Player.AttackTarget then
+    local ok = pcall(Player.AttackTarget, player, unit, target, false, true)
+    if ok then
+      return true
+    end
+
+    ok = pcall(Player.AttackTarget, player, unit, target)
+    if ok then
+      return true
+    end
+  end
+
+  return TryPrepareOrder(player, Enum.UnitOrder.DOTA_UNIT_ORDER_ATTACK_TARGET, target, nil, unit)
+end
+
+local function IssueMoveOrder(player, unit, position)
+  if not player or not unit or not position then
+    return false
+  end
+
+  if Player and Player.MoveToPosition then
+    local ok = pcall(Player.MoveToPosition, player, unit, position, false, true, true)
+    if ok then
+      return true
+    end
+  end
+
+  return TryPrepareOrder(player, Enum.UnitOrder.DOTA_UNIT_ORDER_MOVE_TO_POSITION, nil, position, unit)
+end
+
 local function IssueOrders()
   local current_time = GlobalVars and GlobalVars.GetCurTime and GlobalVars.GetCurTime() or 0
   local follow_distance = GetFollowDistance()
@@ -1000,27 +1058,11 @@ local function IssueOrders()
     end
 
     if target and Entity.IsAlive(target) then
-      Player.PrepareUnitOrders(
-        player,
-        Enum.UnitOrder.DOTA_UNIT_ORDER_ATTACK_TARGET,
-        target,
-        nil,
-        nil,
-        Enum.PlayerOrderIssuer.DOTA_ORDER_ISSUER_PASSED_UNIT_ONLY,
-        unit
-      )
+      IssueAttackOrder(player, unit, target)
       follower.last_action = string.format("Атакую: %s", NPC.GetUnitName(target) or "цель")
       follower.next_action_time = current_time + ORDER_COOLDOWN
     elseif leash_pos and anchor_distance and anchor_distance > follow_distance then
-      Player.PrepareUnitOrders(
-        player,
-        Enum.UnitOrder.DOTA_UNIT_ORDER_MOVE_TO_POSITION,
-        nil,
-        leash_pos,
-        nil,
-        Enum.PlayerOrderIssuer.DOTA_ORDER_ISSUER_PASSED_UNIT_ONLY,
-        unit
-      )
+      IssueMoveOrder(player, unit, leash_pos)
       if anchor_unit and anchor_unit ~= my_hero then
         follower.last_action = string.format("Следую к %s", NPC.GetUnitName(anchor_unit) or "союзнику")
       else
@@ -1049,7 +1091,8 @@ function agent_script.OnUpdate()
   end
 
   my_hero = Heroes.GetLocal() or my_hero
-  local_player = Players and Players.GetLocal and Players.GetLocal() or local_player
+
+  local_player = AcquirePlayerHandle() or local_player
   local_player_id = GetPlayerID()
 
   if not my_hero then
