@@ -229,8 +229,32 @@ local function EnsureFont()
   return debug_font
 end
 
+local function IsValidPlayerHandle(candidate)
+  if not candidate then
+    return false
+  end
+
+  local candidate_type = type(candidate)
+  if candidate_type == "number" or candidate_type == "boolean" or candidate_type == "string" then
+    return false
+  end
+
+  if candidate_type ~= "table" and candidate_type ~= "userdata" then
+    return false
+  end
+
+  if candidate.IsNull then
+    local ok, is_null = pcall(candidate.IsNull, candidate)
+    if ok and is_null then
+      return false
+    end
+  end
+
+  return true
+end
+
 local function AcquirePlayerHandle()
-  if player_handle and type(player_handle) == "userdata" and player_handle.IsNull and player_handle:IsNull() then
+  if not IsValidPlayerHandle(player_handle) then
     player_handle = nil
   end
 
@@ -240,7 +264,7 @@ local function AcquirePlayerHandle()
 
   if Players and Players.GetLocal then
     local candidate = Players.GetLocal()
-    if candidate then
+    if IsValidPlayerHandle(candidate) then
       player_handle = candidate
       return player_handle
     end
@@ -248,7 +272,7 @@ local function AcquirePlayerHandle()
 
   if local_player_id ~= nil and Players and Players.GetPlayer then
     local candidate = Players.GetPlayer(local_player_id)
-    if candidate then
+    if IsValidPlayerHandle(candidate) then
       player_handle = candidate
       return player_handle
     end
