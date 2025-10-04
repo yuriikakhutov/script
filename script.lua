@@ -1100,6 +1100,28 @@ local function IssueOrders()
             anchor_distance = unit_pos:Distance(leash_target)
         end
 
+        if leash_target and anchor_distance and anchor_distance > follow_distance then
+            if local_player then
+                Player.PrepareUnitOrders(
+                    local_player,
+                    Enum.UnitOrder.DOTA_UNIT_ORDER_MOVE_TO_POSITION,
+                    nil,
+                    leash_target,
+                    nil,
+                    Enum.PlayerOrderIssuer.DOTA_ORDER_ISSUER_PASSED_UNIT_ONLY,
+                    unit
+                )
+
+                if anchor_unit then
+                    follower.last_action = string.format("Следую к: %s", NPC.GetUnitName(anchor_unit) or "союзник")
+                else
+                    follower.last_action = "Двигаюсь к точке"
+                end
+                follower.next_action_time = current_time + ORDER_COOLDOWN
+                goto continue
+            end
+        end
+
         local current_target = nil
         if auto_attack then
             current_target = AcquireAttackTarget(unit_pos, anchor_pos, hero_team, allow_creeps, attack_radius)
@@ -1132,28 +1154,6 @@ local function IssueOrders()
                 )
 
                 follower.last_action = string.format("Атакую: %s", NPC.GetUnitName(current_target) or "цель")
-                follower.next_action_time = current_time + ORDER_COOLDOWN
-                goto continue
-            end
-        end
-
-        if leash_target and anchor_distance and anchor_distance > follow_distance then
-            if local_player then
-                Player.PrepareUnitOrders(
-                    local_player,
-                    Enum.UnitOrder.DOTA_UNIT_ORDER_MOVE_TO_POSITION,
-                    nil,
-                    leash_target,
-                    nil,
-                    Enum.PlayerOrderIssuer.DOTA_ORDER_ISSUER_PASSED_UNIT_ONLY,
-                    unit
-                )
-
-                if anchor_unit then
-                    follower.last_action = string.format("Следую к: %s", NPC.GetUnitName(anchor_unit) or "союзник")
-                else
-                    follower.last_action = "Двигаюсь к точке"
-                end
                 follower.next_action_time = current_time + ORDER_COOLDOWN
                 goto continue
             end
