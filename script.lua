@@ -462,9 +462,81 @@ local function GetPlayerID()
         return hero_player_id
     end
 
-    local player = Players.GetLocal()
-    if player and type(Player.GetPlayerID) == "function" then
-        return Player.GetPlayerID(player)
+    if type(Entity.GetOwner) == "function" and type(Player.GetPlayerID) == "function" then
+        local ok_owner, owner = pcall(Entity.GetOwner, my_hero)
+        if ok_owner and owner then
+            local ok_id, owner_id = pcall(Player.GetPlayerID, owner)
+            if ok_id and owner_id ~= nil then
+                return owner_id
+            end
+        end
+    end
+
+    if type(Players.GetLocal) == "function" then
+        local player = Players.GetLocal()
+        if player and type(Player.GetPlayerID) == "function" then
+            local ok_id, player_id = pcall(Player.GetPlayerID, player)
+            if ok_id and player_id ~= nil then
+                return player_id
+            end
+        end
+    end
+
+    return nil
+end
+
+local function AcquirePlayerHandle()
+    if local_player then
+        if type(Player.GetPlayerID) ~= "function" then
+            return local_player
+        end
+
+        local ok_id, cached_id = pcall(Player.GetPlayerID, local_player)
+        if ok_id and cached_id ~= nil then
+            return local_player
+        end
+
+        local_player = nil
+    end
+
+    if type(Players.GetLocal) == "function" then
+        local candidate = Players.GetLocal()
+        if candidate then
+            local_player = candidate
+            return local_player
+        end
+    end
+
+    if local_player_id ~= nil then
+        if type(Players.GetPlayer) == "function" then
+            local candidate = Players.GetPlayer(local_player_id)
+            if candidate then
+                local_player = candidate
+                return local_player
+            end
+        end
+
+        local player_resource = rawget(_G, "PlayerResource")
+        if type(player_resource) == "table" then
+            for _, getter_name in ipairs({ "GetPlayer", "GetPlayerByID" }) do
+                local getter = player_resource[getter_name]
+                if type(getter) == "function" then
+                    local ok_candidate, candidate = pcall(getter, player_resource, local_player_id)
+                    if ok_candidate and candidate then
+                        local_player = candidate
+                        return local_player
+                    end
+                end
+            end
+        end
+    end
+
+    if my_hero and type(Entity.GetOwner) == "function" then
+        local ok_owner, owner = pcall(Entity.GetOwner, my_hero)
+        if ok_owner and owner then
+            local_player = owner
+            return local_player
+        end
     end
 
     return nil
@@ -1284,17 +1356,18 @@ function agent_script.OnUpdate()
     end
 
     my_hero = Heroes.GetLocal()
-    local_player = Players.GetLocal()
-
-    if not my_hero or not local_player then
+    if not my_hero then
         ResetState()
         return
     end
 
     local_player_id = GetPlayerID()
     if not local_player_id then
+        ResetState()
         return
     end
+
+    AcquirePlayerHandle()
 
     UpdateFollowers()
     IssueOrders()
