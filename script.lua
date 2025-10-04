@@ -67,6 +67,7 @@ local ABILITY_DATA = {
     dark_troll_warlord_raise_dead = {
         behavior = "no_target",
         requires_charges = true,
+        ignore_charge_count = true,
         always_cast = true,
         ignore_is_castable = true,
         min_enemies = 0,
@@ -506,24 +507,45 @@ local function IsAbilityReady(unit, ability, metadata)
         return false
     end
 
+    local needs_fallback_ready_check = false
+
     if metadata and metadata.requires_charges then
         local charges = GetAbilityCharges(ability)
-        if charges and charges <= 0 then
-            return false
+        if charges ~= nil and charges <= 0 then
+            if metadata.ignore_charge_count then
+                needs_fallback_ready_check = true
+            else
+                return false
+            end
         end
     end
 
-    if metadata and metadata.ignore_is_castable then
-        return true
-    end
+    local skip_castable_check = metadata and metadata.ignore_is_castable
 
-    if type(Ability.IsReady) == "function" then
-        if not Ability.IsReady(ability) then
-            return false
+    if skip_castable_check then
+        if needs_fallback_ready_check then
+            local fallback_ready = false
+            if type(Ability.IsReady) == "function" then
+                fallback_ready = Ability.IsReady(ability)
+            elseif type(Ability.IsCastable) == "function" and unit then
+                fallback_ready = Ability.IsCastable(ability, NPC.GetMana(unit))
+            else
+                fallback_ready = true
+            end
+
+            if not fallback_ready then
+                return false
+            end
         end
-    elseif type(Ability.IsCastable) == "function" and unit then
-        if not Ability.IsCastable(ability, NPC.GetMana(unit)) then
-            return false
+    else
+        if type(Ability.IsReady) == "function" then
+            if not Ability.IsReady(ability) then
+                return false
+            end
+        elseif type(Ability.IsCastable) == "function" and unit then
+            if not Ability.IsCastable(ability, NPC.GetMana(unit)) then
+                return false
+            end
         end
     end
 
