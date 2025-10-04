@@ -922,11 +922,32 @@ local function IsControlledUnit(unit)
         return false
     end
 
-    if local_player_id and not NPC.IsControllableByPlayer(unit, local_player_id) then
+    if not my_hero then
         return false
     end
 
-    if not my_hero then
+    local player_controls_unit = true
+    if local_player_id then
+        player_controls_unit = NPC.IsControllableByPlayer(unit, local_player_id)
+    end
+
+    if not player_controls_unit then
+        local owner = Entity.GetOwner and Entity.GetOwner(unit) or nil
+        if owner then
+            if owner == my_hero then
+                player_controls_unit = true
+            elseif local_player_id and NPC.IsControllableByPlayer(owner, local_player_id) then
+                player_controls_unit = true
+            else
+                local owner_handle = Entity.GetIndex(owner)
+                if tracked_units[owner_handle] then
+                    player_controls_unit = true
+                end
+            end
+        end
+    end
+
+    if not player_controls_unit then
         return false
     end
 
