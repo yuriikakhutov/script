@@ -1,6 +1,7 @@
 local agent_script = {}
 
 local FOLLOW_DISTANCE = 300
+local ATTACK_RADIUS = 900
 local ORDER_COOLDOWN = 0.3
 
 local RAISE_DEAD_NAMES = {
@@ -205,6 +206,97 @@ local function MoveTowardsHero(unit, data, current_time)
     data.next_order_time = current_time + ORDER_COOLDOWN
 end
 
+local function AcquireAttackTarget(unit)
+    if not my_hero then
+        return nil
+    end
+
+    local unit_pos = Entity.GetAbsOrigin(unit)
+    if not unit_pos then
+        return nil
+    end
+
+    local hero_team = Entity.GetTeamNum(my_hero)
+    local centers = { unit_pos }
+
+    if Entity.IsAlive(my_hero) then
+        local hero_pos = Entity.GetAbsOrigin(my_hero)
+        if hero_pos then
+            centers[#centers + 1] = hero_pos
+        end
+    end
+
+    local function find_best(team_type, predicate)
+        local best_target = nil
+        local best_distance = math.huge
+
+        for _, center in ipairs(centers) do
+            local units = NPCs.InRadius(center, ATTACK_RADIUS, hero_team, team_type) or {}
+            for _, candidate in ipairs(units) do
+                if Entity.IsAlive(candidate) and Entity.GetTeamNum(candidate) ~= hero_team and not NPC.IsCourier(candidate) and predicate(candidate) then
+                    if not NPC.IsIllusion(candidate) then
+                        local pos = Entity.GetAbsOrigin(candidate)
+                        if pos then
+                            local distance = center:Distance(pos)
+                            if distance < best_distance then
+                                best_distance = distance
+                                best_target = candidate
+                            end
+                        end
+                    end
+                end
+            end
+        end
+
+        return best_target
+    end
+
+    local target = find_best(Enum.TeamType.TEAM_ENEMY, function(enemy)
+        return NPC.IsHero(enemy)
+    end)
+
+    if target then
+        return target
+    end
+
+    target = find_best(Enum.TeamType.TEAM_ENEMY, function(enemy)
+        return NPC.IsCreep(enemy)
+    end)
+
+    if target then
+        return target
+    end
+
+    return find_best(Enum.TeamType.TEAM_NEUTRAL, function(enemy)
+        return NPC.IsCreep(enemy)
+    end)
+end
+
+local function AttackTarget(unit, target, data, current_time)
+    if not local_player then
+        return false
+    end
+
+    if not target or not Entity.IsAlive(target) then
+        return false
+    end
+
+    Player.PrepareUnitOrders(
+        local_player,
+        Enum.UnitOrder.DOTA_UNIT_ORDER_ATTACK_TARGET,
+        target,
+        nil,
+        nil,
+        Enum.PlayerOrderIssuer.DOTA_ORDER_ISSUER_PASSED_UNIT_ONLY,
+        unit
+    )
+
+    local target_name = NPC.GetUnitName(target) or "цель"
+    data.last_action = string.format("Атакую: %s", target_name)
+    data.next_order_time = current_time + ORDER_COOLDOWN
+    return true
+end
+
 local function ProcessUnit(unit, data, current_time)
     if TryCastRaiseDead(unit, data, current_time) then
         return
@@ -214,7 +306,31 @@ local function ProcessUnit(unit, data, current_time)
         return
     end
 
-    MoveTowardsHero(unit, data, current_time)
+    local hero_pos = nil
+    if my_hero and Entity.IsAlive(my_hero) then
+        hero_pos = Entity.GetAbsOrigin(my_hero)
+    end
+
+    local unit_pos = Entity.GetAbsOrigin(unit)
+    if hero_pos and unit_pos then
+        local distance = hero_pos:Distance(unit_pos)
+        if distance > FOLLOW_DISTANCE then
+            MoveTowardsHero(unit, data, current_time)
+            return
+        end
+    end
+
+    local target = AcquireAttackTarget(unit)
+    if target and AttackTarget(unit, target, data, current_time) then
+        return
+    end
+
+    if hero_pos then
+        MoveTowardsHero(unit, data, current_time)
+    else
+        data.last_action = "Ожидаю"
+        data.next_order_time = current_time + ORDER_COOLDOWN
+    end
 end
 
 function agent_script.OnUpdate()
