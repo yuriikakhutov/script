@@ -173,6 +173,21 @@ local ABILITY_DATA = {
             "thunderhide_frenzy",
         },
     },
+    big_thunder_lizard_slam = {
+        behavior = "no_target",
+        radius = 350,
+        min_enemies = 1,
+        allow_creeps = true,
+        allow_neutrals = true,
+        message = "Грозовой удар",
+    },
+    big_thunder_lizard_frenzy = {
+        behavior = "target",
+        target = "ally",
+        prefer_anchor = true,
+        include_self = false,
+        message = "Вдохновляю на атаку",
+    },
     ancient_black_dragon_fireball = {
         behavior = "point",
         target = "enemy",
@@ -192,6 +207,10 @@ local ABILITY_DATA = {
         allow_neutrals = true,
         fixed_range = 800,
         message = "Запускаю торнадо",
+        is_channeled = true,
+        aliases = {
+            "enraged_wildkin_tornado",
+        },
     },
     wildwing_ripper_hurricane = {
         behavior = "target",
@@ -199,6 +218,9 @@ local ABILITY_DATA = {
         allow_creeps = true,
         allow_neutrals = true,
         message = "Подбрасываю врага",
+        aliases = {
+            "enraged_wildkin_hurricane",
+        },
     },
     giant_wolf_intimidate = {
         behavior = "no_target",
@@ -214,6 +236,15 @@ local ABILITY_DATA = {
         min_enemies = 0,
         always_cast = true,
         message = "Боевой вой",
+    },
+    fel_beast_haunt = {
+        behavior = "target",
+        target = "enemy",
+        prefer_heroes = true,
+        allow_creeps = true,
+        allow_neutrals = true,
+        range_buffer = 50,
+        message = "Насылаю ужас",
     },
     ghost_frost_attack = {
         behavior = "target",
@@ -245,6 +276,61 @@ local ABILITY_DATA = {
         prefer_heroes = true,
         ally_max_health_pct = 0.85,
         message = "Лечу союзника",
+    },
+    frogmen_arm_of_the_deep = {
+        behavior = "point",
+        target = "enemy",
+        allow_creeps = true,
+        allow_neutrals = true,
+        min_enemies = 1,
+        fixed_range = 300,
+        range_buffer = 50,
+        message = "Удар глубин",
+    },
+    frogmen_tendrils_of_the_deep = {
+        behavior = "point",
+        target = "enemy",
+        allow_creeps = true,
+        allow_neutrals = true,
+        min_enemies = 1,
+        fixed_range = 325,
+        range_buffer = 50,
+        message = "Щупальца глубин",
+    },
+    frogmen_congregation_of_the_deep = {
+        behavior = "no_target",
+        radius = 325,
+        min_enemies = 1,
+        allow_creeps = true,
+        allow_neutrals = true,
+        message = "Прилив глубин",
+    },
+    frogmen_water_bubble_small = {
+        behavior = "target",
+        target = "ally",
+        prefer_anchor = true,
+        prefer_heroes = true,
+        include_self = true,
+        ally_max_health_pct = 0.95,
+        message = "Малый пузырь защиты",
+    },
+    frogmen_water_bubble_medium = {
+        behavior = "target",
+        target = "ally",
+        prefer_anchor = true,
+        prefer_heroes = true,
+        include_self = true,
+        ally_max_health_pct = 0.95,
+        message = "Средний пузырь защиты",
+    },
+    frogmen_water_bubble_large = {
+        behavior = "target",
+        target = "ally",
+        prefer_anchor = true,
+        prefer_heroes = true,
+        include_self = true,
+        ally_max_health_pct = 0.95,
+        message = "Большой пузырь защиты",
     },
 }
 
@@ -887,6 +973,10 @@ local function TryCastAbility(context, ability, metadata)
 end
 
 local function TryCastAbilities(follower, unit, context, current_time)
+    if type(NPC.IsChannellingAbility) == "function" and NPC.IsChannellingAbility(unit) then
+        return false
+    end
+
     local auto_cast_enabled = ShouldAutoCast()
 
     for slot = 0, 23 do
@@ -1088,6 +1178,12 @@ local function IssueOrders()
 
         local unit_pos = Entity.GetAbsOrigin(unit)
         if not unit_pos then
+            goto continue
+        end
+
+        if type(NPC.IsChannellingAbility) == "function" and NPC.IsChannellingAbility(unit) then
+            follower.last_action = "Канализирую способность"
+            follower.next_action_time = current_time + ORDER_COOLDOWN
             goto continue
         end
 
